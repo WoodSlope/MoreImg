@@ -1021,15 +1021,15 @@
                     <div className="flex items-center justify-between mb-2">
                       <label className="block text-[13px] font-bold text-slate-700">系统指令 (System Prompt)</label>
                     </div>
-                    <textarea 
-                      value={apiConfig.systemPrompt}
-                      onChange={(e) => setApiConfig({...apiConfig, systemPrompt: e.target.value})}
-                      className="w-full h-64 p-4 text-[13px] leading-relaxed rounded-xl border border-slate-200/60 bg-white/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all font-mono text-slate-600 custom-scrollbar resize-y"
-                      placeholder="定义 Agent 的行为规范..."
+                      <textarea 
+                        value={apiConfig.systemPrompt}
+                        onChange={(e) => setApiConfig({...apiConfig, systemPrompt: e.target.value})}
+                        className="w-full h-64 p-4 text-[13px] leading-relaxed rounded-xl border border-slate-200/60 bg-white/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all font-mono text-slate-600 custom-scrollbar resize-y"
+                      placeholder={`请在这里填写你的系统指令，用来定义 Agent 的工作流、输出格式和提示词生成规则。\n\n例如：你是一个内容加工 Agent，需要先判断文章是否适合拆成知识卡片，再输出结构化卡片内容，最后生成中文生图提示词。`}
                       spellCheck="false"
                     />
                     <p className="text-[12px] text-slate-400 mt-2">
-                      在此处深度定制 Agent 的思考逻辑、判型规则与生图提示词风格。支持 Markdown 格式。
+                      在此处深度定制 Agent 的思考逻辑、判型规则与生图提示词风格。API Key 与系统指令仅保存在当前浏览器本地 localStorage，不会上传到作者服务器。
                     </p>
                   </div>
 

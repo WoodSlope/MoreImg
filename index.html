@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>一文多图 - 文生图提示词 Agent</title>
+  
+  <!-- 引入高级无衬线字体与等宽字体 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+          },
+          animation: {
+            'pulse-slow': 'pulse 5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'fade-in': 'fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            'fade-in-down': 'fadeInDown 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+            'fade-in-up': 'fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          },
+          keyframes: {
+            fadeIn: {
+              'from': { opacity: '0' },
+              'to': { opacity: '1' },
+            },
+            fadeInDown: {
+              'from': { opacity: '0', transform: 'translateY(-15px) scale(0.98)' },
+              'to': { opacity: '1', transform: 'translateY(0) scale(1)' },
+            },
+            fadeInUp: {
+              'from': { opacity: '0', transform: 'translateY(15px)' },
+              'to': { opacity: '1', transform: 'translateY(0)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* 全局滚动条优化 */
+    .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: rgba(148, 163, 184, 0.4);
+      border-radius: 10px;
+      transition: background-color 0.3s ease;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(148, 163, 184, 0.7); }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* =========================================================
+       左侧输入框多状态与流动渐变描边系统
+       ========================================================= */
+    @keyframes borderFlow {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    
+    .flowing-border-wrapper {
+      position: relative;
+      border-radius: 16px;
+      z-index: 1;
+    }
+    
+    .flowing-border-wrapper::before {
+      content: "";
+      position: absolute;
+      inset: -2px;
+      border-radius: 18px;
+      background: linear-gradient(90deg, #6366f1, #a855f7, #0ea5e9, #6366f1);
+      background-size: 300% 300%;
+      animation: borderFlow 3s ease infinite;
+      z-index: -1;
+      opacity: 0.4;
+      transition: opacity 0.3s ease;
+      padding: 2px;
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+    }
+    
+    .flowing-border-wrapper:focus-within::before {
+      opacity: 1;
+    }
+    
+    .flowing-border-inner {
+      position: relative;
+      z-index: 2;
+      background-color: rgba(255, 255, 255, 0.4) !important;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6) !important;
+      border: 0px solid transparent !important; 
+      border-radius: 16px !important;
+      outline: none !important;
+      backdrop-filter: blur(12px);
+      transition: all 0.3s ease;
+      display: block; 
+    }
+    
+    .flowing-border-wrapper:hover .flowing-border-inner {
+      background-color: rgba(255, 255, 255, 0.6) !important;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8) !important;
+    }
+    
+    .flowing-border-wrapper:focus-within .flowing-border-inner {
+      background-color: rgba(255, 255, 255, 0.9) !important;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0) !important;
+    }
+
+    /* =========================================================
+       背景弥散流体动画 (重度强化版 & GPU 硬件加速防闪烁)
+       ========================================================= */
+    @keyframes blobFluid {
+      0% {
+        transform: translate(0vw, 0vh) scale(1) rotate(0deg);
+        border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+      }
+      25% {
+        transform: translate(15vw, -15vh) scale(1.3, 0.8) rotate(90deg);
+        border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+      }
+      50% {
+        transform: translate(-10vw, 25vh) scale(0.8, 1.4) rotate(180deg);
+        border-radius: 40% 60% 70% 30% / 40% 60% 30% 60%;
+      }
+      75% {
+        transform: translate(-25vw, -10vh) scale(1.2, 1.1) rotate(270deg);
+        border-radius: 70% 30% 50% 50% / 30% 40% 60% 70%;
+      }
+      100% {
+        transform: translate(0vw, 0vh) scale(1) rotate(360deg);
+        border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+      }
+    }
+
+    .animate-blob-fluid {
+      /* 加快整体流动速率，使得运动轨迹更加活跃 */
+      animation: blobFluid 16s infinite linear;
+      transform-origin: center center;
+      /* 强制开启 GPU 硬件加速，分离图层，防止前端滚动时背景模糊发生重绘闪烁 */
+      will-change: transform, border-radius;
+      -webkit-backface-visibility: hidden;
+      backface-visibility: hidden;
+      -webkit-transform: translateZ(0);
+      transform: translateZ(0);
+    }
+
+    .animation-delay-1 {
+      animation-delay: -5s;
+      animation-duration: 20s;
+    }
+    .animation-delay-2 {
+      animation-delay: -10s;
+      animation-duration: 24s;
+    }
+  </style>
+</head>
+<body class="antialiased text-slate-800 bg-slate-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const Icon = ({ name, className = "", strokeWidth = 2, fill = "none", ...props }) => {
+      const iconRef = useRef(null);
+      useEffect(() => {
+        if (iconRef.current && window.lucide) {
+          iconRef.current.innerHTML = '';
+          const i = document.createElement('i');
+          i.setAttribute('data-lucide', name);
+          iconRef.current.appendChild(i);
+          window.lucide.createIcons({
+            attrs: { class: 'w-full h-full', 'stroke-width': strokeWidth, fill: fill, ...props }
+          });
+        }
+      }, [name, strokeWidth, fill, JSON.stringify(props)]);
+      return <span ref={iconRef} className={`inline-flex items-center justify-center shrink-0 leading-none ${className}`}></span>;
+    };
+
+    // =========================================================================
+    // 全局统一 Markdown 渲染组件
+    // =========================================================================
+    const FormattedContent = ({ text }) => {
+      if (!text) return null;
+      const lines = text.split('\n');
+      let isFirstNonEmpty = true; 
+
+      return (
+        <div className="text-slate-700 leading-relaxed">
+          {lines.map((line, i) => {
+            // 新增：过滤无用的 AI 过程话术与过渡文本
+            const cleanLineForCheck = line.replace(/[*_]/g, '').trim();
+            if (
+              /^进入阶段\d[。.]?$/.test(cleanLineForCheck) ||
+              /^卡片内容包生成完毕[，,]待转入视觉指令生产[。.]?$/.test(cleanLineForCheck) ||
+              /^核查与精修说明[：:]/.test(cleanLineForCheck)
+            ) {
+              return null; // 直接静默拦截，不渲染到前端
+            }
+
+            if (line.trim() === '') return <div key={i} className="h-3"></div>;
+            
+            // 修复：同时支持 **加粗** 和 *斜体* 解析
+            const formatInline = (str) => {
+              const parts = str.split(/(\*\*.*?\*\*|\*[^*]+\*)/g);
+              return parts.map((part, index) => {
+                if (part.startsWith('**') && part.endsWith('**')) {
+                  return <strong key={index} className="font-bold text-slate-900">{part.slice(2, -2)}</strong>;
+                }
+                if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+                  return <em key={index} className="italic text-slate-500">{part.slice(1, -1)}</em>;
+                }
+                return part;
+              });
+            };
+
+            const isFirst = isFirstNonEmpty;
+            isFirstNonEmpty = false;
+            const trimmedLine = line.trimStart();
+
+            // 新增：处理一级标题 #
+            if (trimmedLine.startsWith('# ')) {
+              return (
+                <h1 key={i} className={`text-[24px] font-black text-slate-900 mb-5 tracking-tight ${isFirst ? 'mt-0' : 'mt-10'}`}>
+                  {formatInline(trimmedLine.replace('# ', ''))}
+                </h1>
+              );
+            }
+
+            if (trimmedLine.startsWith('## ')) {
+              return (
+                <h2 key={i} className={`text-[20px] font-extrabold text-slate-900 mb-4 ${isFirst ? 'mt-0' : 'mt-8'}`}>
+                  {formatInline(trimmedLine.replace('## ', ''))}
+                </h2>
+              );
+            }
+            
+            if (trimmedLine.startsWith('### ')) {
+              return (
+                <h3 key={i} className={`text-[16px] font-bold text-slate-800 mb-3 ${isFirst ? 'mt-0' : 'mt-6'}`}>
+                  {formatInline(trimmedLine.replace('### ', ''))}
+                </h3>
+              );
+            }
+
+            if (trimmedLine.startsWith('#### ')) {
+              return (
+                <h4 key={i} className={`text-[15px] font-semibold text-slate-800 mb-2.5 ${isFirst ? 'mt-0' : 'mt-5'}`}>
+                  {formatInline(trimmedLine.replace('#### ', ''))}
+                </h4>
+              );
+            }
+            
+            if (trimmedLine.match(/^[-•*]\s+/)) {
+              return (
+                <div key={i} className="flex mb-2.5 items-start">
+                  <span className="mr-2.5 text-indigo-400 font-bold mt-[1px] shrink-0 text-[14px]">•</span>
+                  <span className="text-[14px] leading-relaxed flex-1">
+                    {formatInline(trimmedLine.replace(/^[-•*]\s+/, ''))}
+                  </span>
+                </div>
+              );
+            }
+            
+            const olMatch = trimmedLine.match(/^(\d+\.)\s+(.*)/);
+            if (olMatch) {
+              return (
+                <div key={i} className="flex mb-2.5 items-start">
+                  <span className="mr-2 text-indigo-500 font-mono font-bold text-[13px] mt-[2px] shrink-0 w-4 text-right">
+                    {olMatch[1]}
+                  </span>
+                  <span className="text-[14px] leading-relaxed flex-1">
+                    {formatInline(olMatch[2])}
+                  </span>
+                </div>
+              );
+            }
+
+            if (trimmedLine.match(/^[-*_]{3,}$/)) {
+              return <hr key={i} className="my-6 border-slate-200/60" />;
+            }
+
+            return (
+              <p key={i} className="mb-3 text-[14px] leading-relaxed last:mb-0">
+                {formatInline(trimmedLine)}
+              </p>
+            );
+          })}
+        </div>
+      );
+    };
+
+    const NEW_STAGES = [
+      { id: 'step1', name: '判型与核查', icon: 'ListChecks', subStages: [1, 2] },
+      { id: 'step2', name: '重构与提炼', icon: 'Cpu', subStages: [3, 4] },
+      { id: 'step3', name: '视觉提示词', icon: 'Image', subStages: [5] }
+    ];
+
+    const STAGE_LOADING_TEXT = {
+      1: "正在注入原料，执行 AI 准入判型...",
+      2: "引擎运转：全网事实核查与结构拆解中...",
+      3: "逻辑精装中，正在重构文章框架...",
+      4: "正在切片：模块化封装知识卡片包...",
+      5: "视觉中枢唤醒：渲染生产级中文提示词...",
+      6: "最终质量验收，校验卡片与指令匹配度..."
+    };
+
+    const parseStreamedText = (fullText) => {
+      const stages = { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '' };
+      
+      // 核心修复：宽容度极高的正则，捕捉 [阶段1]、### 阶段1、**阶段1**、阶段1： 等各种变体，只要位于行首即可
+      const stageRegex = /(?:^|\n)[\s#*\[【]*阶段\s*([1-6])[^\n]*/g;
+      let match;
+      let lastIndex = 0;
+      let currentStage = null;
+
+      while ((match = stageRegex.exec(fullText)) !== null) {
+        if (currentStage !== null) {
+          stages[currentStage] = fullText.substring(lastIndex, match.index).trim();
+        }
+        currentStage = parseInt(match[1]);
+        lastIndex = match.index + match[0].length;
+      }
+      
+      if (currentStage !== null) {
+        stages[currentStage] = fullText.substring(lastIndex).trim();
+      } else if (fullText.trim()) {
+        // 兜底机制：如果没有任何标准格式输出，强制渲染在阶段1中
+        stages[1] = fullText.trim();
+      }
+      return { stages, latestStage: currentStage || 1 };
+    };
+
+    const Toast = ({ message, type = 'success', onClose, duration = 3000 }) => {
+      useEffect(() => {
+        const timer = setTimeout(onClose, duration);
+        return () => clearTimeout(timer);
+      }, [onClose, duration]);
+
+      return (
+        <div className={`fixed top-6 right-6 z-50 flex items-center px-5 py-4 rounded-2xl shadow-lg border backdrop-blur-xl animate-fade-in-down
+          ${type === 'success' ? 'bg-white border-slate-200/60 text-slate-800' : 'bg-white border-red-200 text-slate-800'}`}>
+          {type === 'success' ? (
+            <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center mr-3 relative border border-indigo-100/50">
+              <div className="absolute inset-0 bg-indigo-400 rounded-full animate-ping opacity-20"></div>
+              <Icon name="Sparkles" className="w-4 h-4 text-indigo-500" />
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center mr-3 border border-red-100">
+              <Icon name="AlertCircle" className="w-4 h-4 text-red-500" />
+            </div>
+          )}
+          <span className="font-semibold text-[14px]">{message}</span>
+        </div>
+      );
+    };
+
+    function App() {
+      // 在初始配置中引入 systemPrompt，发行版默认留空
+      const [apiConfig, setApiConfig] = useState({ 
+        apiUrl: 'https://api.deepseek.com/v1/chat/completions', 
+        model: 'deepseek-chat', 
+        apiKey: '',
+        systemPrompt: ''
+      });
+      const [isConfigOpen, setIsConfigOpen] = useState(true);
+      const [history, setHistory] = useState([]);
+      const [activeHistoryId, setActiveHistoryId] = useState(null);
+      const [inputText, setInputText] = useState('');
+      const [isProcessing, setIsProcessing] = useState(false);
+      const [showResults, setShowResults] = useState(false); 
+      const [internalStage, setInternalStage] = useState(0); 
+      const [activeStageTab, setActiveStageTab] = useState('step1');
+      const [toast, setToast] = useState(null);
+      
+      const [isInputFocused, setIsInputFocused] = useState(false);
+
+      const [currentSession, setCurrentSession] = useState({
+        rawText: '',
+        stages: { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '' },
+        isHalted: false
+      });
+      const messagesEndRef = useRef(null);
+
+      useEffect(() => {
+        const savedConfig = localStorage.getItem('agent_api_config');
+        if (savedConfig) {
+          const parsedConfig = JSON.parse(savedConfig);
+          // 确保发行版中无配置时初始为空字符串
+          if (typeof parsedConfig.systemPrompt !== 'string') {
+            parsedConfig.systemPrompt = '';
+          }
+          setApiConfig(parsedConfig);
+          if (parsedConfig.apiKey && parsedConfig.systemPrompt.trim()) {
+            setIsConfigOpen(false);
+          }
+        } else {
+          setIsConfigOpen(true);
+        }
+        
+        const savedHistory = localStorage.getItem('agent_history');
+        if (savedHistory) setHistory(JSON.parse(savedHistory));
+      }, []);
+
+      const handleSaveConfig = () => {
+        localStorage.setItem('agent_api_config', JSON.stringify(apiConfig));
+        setToast({ message: 'AI 引擎及技能配置已保存', type: 'success' });
+        setIsConfigOpen(false);
+      };
+
+      const deleteHistoryItem = (id, e) => {
+        e.stopPropagation(); 
+        const updatedHistory = history.filter(item => item.id !== id);
+        setHistory(updatedHistory);
+        localStorage.setItem('agent_history', JSON.stringify(updatedHistory));
+        
+        if (activeHistoryId === id) {
+          setActiveHistoryId(null);
+          setShowResults(false);
+          setCurrentSession({ rawText: '', stages: { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '' }, isHalted: false });
+        }
+        setToast({ message: '已删除该条记录', type: 'success' });
+      };
+
+      const handleStartProcessing = async (overrideText = null) => {
+        const textToProcess = (typeof overrideText === 'string' ? overrideText : inputText).trim();
+
+        if (!apiConfig.apiKey) { setToast({ message: '请先配置密钥', type: 'error' }); setIsConfigOpen(true); return; }
+        if (!apiConfig.systemPrompt.trim()) { setToast({ message: '请先配置系统指令', type: 'error' }); setIsConfigOpen(true); return; }
+        if (!textToProcess) { setToast({ message: '请输入需分析的长文', type: 'error' }); return; }
+
+        setInputText(textToProcess);
+        setIsProcessing(true);
+        setShowResults(false); 
+        setInternalStage(1);
+        setActiveStageTab('step1');
+        setCurrentSession({ rawText: '', stages: { 1: '', 2: '', 3: '', 4: '', 5: '', 6: '' }, isHalted: false });
+        
+        let fullResponseText = '';
+        let rawBuffer = '';
+        let isStreamedData = false;
+        const newSessionId = Date.now().toString();
+
+        try {
+          const response = await fetch(apiConfig.apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+            body: JSON.stringify({
+              model: apiConfig.model,
+              // 使用配置中动态更新的 systemPrompt
+              messages: [ { role: 'system', content: apiConfig.systemPrompt }, { role: 'user', content: `请处理以下文章：\n\n${textToProcess}` } ],
+              stream: true,
+              temperature: 0.7
+            })
+          });
+
+          // 如果接口返回了 HTTP 错误码（如 402 余额不足，401 权限错误等），进行拦截抛出
+          if (!response.ok) {
+            let errorMsg = response.statusText;
+            try {
+              const errorData = await response.json();
+              if (errorData.error && errorData.error.message) {
+                errorMsg = errorData.error.message;
+              }
+            } catch (e) {}
+            throw new Error(`(HTTP ${response.status}) ${errorMsg}`);
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let streamBuffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              // 循环结束时，处理可能残留在 buffer 中的最后一点数据
+              if (streamBuffer.trim() && streamBuffer.startsWith('data:')) {
+                 try {
+                   const dataStr = streamBuffer.substring(5).trim();
+                   if (dataStr !== '[DONE]') {
+                     const data = JSON.parse(dataStr);
+                     fullResponseText += data.choices[0]?.delta?.content || '';
+                   }
+                 } catch(e) {}
+              }
+              break;
+            }
+            
+            const chunk = decoder.decode(value, { stream: true });
+            rawBuffer += chunk; // 完整保留网络发来的任何数据，用于兜底
+            streamBuffer += chunk;
+            
+            const lines = streamBuffer.split('\n');
+            streamBuffer = lines.pop(); // 保留最后一行不完整的字符串，等待下一个包拼接
+            
+            for (let line of lines) {
+              line = line.trim();
+              if (line === '' || line === 'data: [DONE]') continue;
+              
+              if (line.startsWith('data:')) {
+                isStreamedData = true; // 标记我们成功接收到了标准的流式 SSE 数据
+                try {
+                  const dataStr = line.substring(5).trim();
+                  if (dataStr === '[DONE]') continue;
+                  
+                  const data = JSON.parse(dataStr);
+                  const delta = data.choices[0]?.delta?.content || '';
+                  if (delta) {
+                    fullResponseText += delta;
+                    const parsed = parseStreamedText(fullResponseText);
+                    setCurrentSession(prev => ({ ...prev, rawText: fullResponseText, stages: parsed.stages }));
+                    setInternalStage(parsed.latestStage || 1);
+                  }
+                } catch (e) {
+                  console.warn("流数据片段解析失败（跳过等待拼接）:", e);
+                }
+              }
+            }
+          }
+
+          // 【终极兜底策略】：如果接口成功返回 200，但没有接收到任何 'data:' 开头的流式数据
+          // 比如：网关去掉了流式特征变成了普通JSON，或者返回了一段 HTML 错误代码
+          if (!isStreamedData && rawBuffer.trim()) {
+             try {
+               const data = JSON.parse(rawBuffer);
+               fullResponseText = data.choices?.[0]?.message?.content || data.choices?.[0]?.delta?.content || '';
+             } catch (e) {
+               // 如果连 JSON 都不是，把原始字符串硬塞进去作为结果，并加上显眼的错误标记
+               fullResponseText = "## ⚠️ 接口返回格式异常\n\n大模型接口返回了非标准的文本结构，这通常是因为 API 网关报错或请求被代理拦截。以下是接口返回的原始内容：\n\n---\n" + rawBuffer;
+             }
+             
+             // 手动触发一次最终渲染
+             const parsed = parseStreamedText(fullResponseText);
+             setCurrentSession(prev => ({ ...prev, rawText: fullResponseText, stages: parsed.stages }));
+             setInternalStage(parsed.latestStage || 1);
+          }
+
+          if (!fullResponseText.trim()) {
+            throw new Error("大模型未返回任何有效内容，请检查接口配置或稍后重试。");
+          }
+
+          const finalParsed = parseStreamedText(fullResponseText);
+          // 判定是否被系统拦截或由于错误中止 (同步应用更宽松的正则逻辑)
+          const isHalted = (finalParsed.latestStage === 1 && !/(?:^|\n)[\s#*\[【]*阶段\s*2/.test(fullResponseText)) || fullResponseText.includes('接口返回格式异常');
+          setCurrentSession(prev => ({ ...prev, isHalted }));
+
+          const newHistoryItem = { 
+            id: newSessionId, 
+            title: textToProcess.substring(0, 20) + '...', 
+            date: new Date().toLocaleString(), 
+            sessionData: { rawText: fullResponseText, stages: finalParsed.stages, isHalted },
+            originalInput: textToProcess 
+          };
+          const updatedHistory = [newHistoryItem, ...history].slice(0, 50);
+          setHistory(updatedHistory);
+          localStorage.setItem('agent_history', JSON.stringify(updatedHistory));
+          setActiveHistoryId(newSessionId);
+          
+          setToast({ message: isHalted ? '流程异常终止' : '物料包生成完毕！', type: isHalted ? 'error' : 'success' });
+        } catch (error) {
+          // 如果抛出错误，Toast 停留 5 秒让用户看清
+          setToast({ message: `引擎连接失败: ${error.message}`, type: 'error', duration: 5000 });
+        } finally {
+          setIsProcessing(false);
+          setShowResults(true); 
+        }
+      };
+
+      const loadHistoryItem = (id) => {
+        const item = history.find(h => h.id === id);
+        if (item) {
+          setActiveHistoryId(id);
+          setCurrentSession(item.sessionData);
+          let highest = 1;
+          for (let i = 6; i >= 1; i--) { if (item.sessionData.stages[i]?.trim()) { highest = i; break; } }
+          setInternalStage(highest);
+          setShowResults(true);
+          if (highest >= 5) setActiveStageTab('step3');
+          else if (highest >= 3) setActiveStageTab('step2');
+          else setActiveStageTab('step1');
+        }
+      };
+
+      const copyToClipboard = (text, label) => {
+        navigator.clipboard.writeText(text).then(() => setToast({ message: `${label} 已复制到剪贴板`, type: 'success' }));
+      };
+
+      // 提取干净且连贯的所有提示词内容
+      const getCleanAllPrompts = (content) => {
+        if (!content) return '';
+        
+        // 优先尝试提取“总览代码块”（即第一个被 ``` 包裹的完整内容块）
+        const firstCodeBlockMatch = content.match(/```[^\n]*\n([\s\S]*?)```/);
+        // 如果提取到了，并且里面含有类似 [封面] 这样的特殊记号，说明这就是干净的总览代码块
+        if (firstCodeBlockMatch && firstCodeBlockMatch[1].includes('[')) {
+          return firstCodeBlockMatch[1].trim();
+        }
+        
+        // 兜底策略：如果大模型没有输出总览代码块，则将所有的拆分版卡片拼接起来
+        const sections = [];
+        const regex = /###\s*\[(.*?)\]\s*([\s\S]*?)(?=###|$)/g;
+        let match;
+        while ((match = regex.exec(content)) !== null) { 
+          sections.push({ title: match[1], text: match[2].replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim() }); 
+        }
+        
+        // 应对不规范输出的次级兜底
+        if (sections.length === 0) {
+          const fallbackRegex = /\[(.*?)\]\s*([\s\S]*?)(?=\[|$)/g;
+          while ((match = fallbackRegex.exec(content)) !== null) {
+            if (!match[1].includes('阶段') && !match[1].includes('总览')) {
+              sections.push({ title: match[1], text: match[2].replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim() }); 
+            }
+          }
+        }
+        
+        // 如果成功提取到片段，拼装为完整的文本
+        if (sections.length > 0) {
+          return sections.map(s => `[${s.title}]\n${s.text}`).join('\n\n');
+        }
+        
+        // 终极兜底：只去掉反引号，返回原样文本
+        return content.replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim();
+      };
+
+      const renderStageContent = () => {
+        const currentStageConfig = NEW_STAGES.find(s => s.id === activeStageTab);
+        if (!currentStageConfig) return null;
+
+        const hasContent = currentStageConfig.subStages.some(sId => currentSession.stages[sId] && currentSession.stages[sId].trim() !== '');
+
+        if (!hasContent) {
+          return (
+            <div className="flex flex-col items-center justify-center py-20 animate-fade-in-up">
+              <div className="w-16 h-16 bg-white/60 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 border border-white/80 shadow-sm">
+                <Icon name="Box" className="w-8 h-8 text-slate-300" />
+              </div>
+              <p className="text-[15px] font-bold text-slate-500 mb-1">当前阶段暂无内容</p>
+              <p className="text-[13px] text-slate-400">大模型输出格式解析异常，或正在等待渲染指令。</p>
+            </div>
+          );
+        }
+
+        return (
+          <div className="space-y-12">
+            {currentStageConfig.subStages.map(sId => {
+              const content = currentSession.stages[sId];
+              if (!content || !content.trim()) return null;
+
+              return (
+                <div key={sId} className="animate-fade-in-up">
+                  <div className="flex items-center mb-6 px-2">
+                    <div className="h-4 w-1 bg-indigo-500 rounded-full mr-3"></div>
+                    <h4 className="text-[14px] font-bold text-slate-800 tracking-widest">
+                      {sId === 1 ? 'AI 准入判型' : sId === 2 ? '深度事实核查与骨架提取' : sId === 3 ? '精修版文章重构' : sId === 4 ? '知识卡片内容包' : sId === 5 ? '视觉提示词 (Prompts)' : ''}
+                    </h4>
+                  </div>
+                  <div>
+                    {sId === 3 ? (
+                      <div className="bg-white/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl shadow-sm border border-slate-200">
+                        <FormattedContent text={content} />
+                      </div>
+                    ) : sId === 4 ? (
+                      (() => {
+                        const cardBlocks = content.split(/\*\*.*?卡片.*?\*\*/g).filter(b => b.trim() !== '');
+                        const cardHeaders = content.match(/\*\*.*?卡片.*?\*\*/g) || [];
+                        if (cardBlocks.length > 0 && cardHeaders.length === cardBlocks.length) {
+                          return (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                              {cardBlocks.map((block, i) => (
+                                <div key={i} className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-sm border border-slate-200 p-8 flex flex-col aspect-[3/4] relative overflow-hidden group hover:shadow-md transition-all duration-300 transform hover:-translate-y-1">
+                                  <h3 className="text-[18px] font-bold text-slate-800 mb-6 flex items-center">
+                                    <span className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-[14px] mr-3 font-mono shadow-sm border border-indigo-100">{i+1}</span>
+                                    <span className="truncate">{cardHeaders[i].replace(/\*\*/g, '')}</span>
+                                  </h3>
+                                  <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                                    <FormattedContent text={block.trim()} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="bg-white/80 backdrop-blur-xl p-8 rounded-3xl shadow-sm border border-slate-200">
+                            <FormattedContent text={content} />
+                          </div>
+                        );
+                      })()
+                    ) : sId === 5 ? (
+                      (() => {
+                        const promptSections = [];
+                        const regex = /###\s*\[(.*?)\]\s*([\s\S]*?)(?=###|$)/g;
+                        let match;
+                        while ((match = regex.exec(content)) !== null) { promptSections.push({ title: match[1], text: match[2].trim() }); }
+                        if (promptSections.length === 0) {
+                          const fallbackRegex = /\[(.*?)\]\s*([\s\S]*?)(?=\[|$)/g;
+                          while ((match = fallbackRegex.exec(content)) !== null) {
+                            if (!match[1].includes('阶段')) { promptSections.push({ title: match[1], text: match[2].trim() }); }
+                          }
+                        }
+
+                        if (promptSections.length > 0) {
+                          return (
+                            <div className="space-y-6">
+                              {promptSections.map((sec, i) => {
+                                // 新增：提取干净的提示词文本，过滤掉 Markdown 代码块符号 (``` 或 ```markdown)
+                                const cleanPromptText = sec.text.replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim();
+                                
+                                return (
+                                  <div key={i} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden group transition-all hover:shadow-md">
+                                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
+                                      <span className="text-[14px] font-bold text-slate-800 flex items-center"><Icon name="Image" className="w-4 h-4 mr-2 text-indigo-500" /> {sec.title}</span>
+                                      <button onClick={() => copyToClipboard(cleanPromptText, `[${sec.title}]`)} className="w-10 h-10 text-slate-400 hover:text-indigo-600 bg-white hover:bg-indigo-50 rounded-xl transition-all flex items-center justify-center border border-slate-200 shadow-sm active:scale-95" title="复制单段指令"><Icon name="Copy" className="w-4 h-4" /></button>
+                                    </div>
+                                    <pre className="p-6 text-[14px] text-slate-700 whitespace-pre-wrap font-mono leading-relaxed overflow-x-auto bg-white"><code>{cleanPromptText}</code></pre>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        }
+                        
+                        const fullCleanText = content.replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim();
+                        return (
+                          <div className="bg-white/80 backdrop-blur-xl p-8 rounded-3xl shadow-sm border border-slate-200">
+                             <FormattedContent text={fullCleanText} />
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <div className="bg-white/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl shadow-sm border border-slate-200">
+                        <FormattedContent text={content} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      };
+
+      // 按钮禁用逻辑同步追加系统指令非空校验
+      const isButtonDisabled = isProcessing || !apiConfig.apiKey || !apiConfig.systemPrompt.trim() || !inputText.trim();
+
+      return (
+        <div className="flex h-screen overflow-hidden font-sans text-slate-800 relative bg-transparent">
+          
+          <div className="fixed inset-0 overflow-hidden pointer-events-none z-[-1] bg-slate-50/50">
+            <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-400/40 blur-[90px] animate-blob-fluid transform-gpu"></div>
+            <div className="absolute top-[10%] right-[-5%] w-[40vw] h-[40vw] bg-sky-300/40 blur-[90px] animate-blob-fluid animation-delay-1 transform-gpu"></div>
+            <div className="absolute bottom-[-10%] left-[15%] w-[50vw] h-[50vw] bg-purple-400/40 blur-[90px] animate-blob-fluid animation-delay-2 transform-gpu"></div>
+          </div>
+
+          {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+          <div className="w-[320px] h-full flex-shrink-0 flex flex-col bg-white/40 backdrop-blur-3xl border-r border-white/60 shadow-[8px_0_32px_rgba(31,38,135,0.05)] z-20 p-6 relative">
+            
+            <div className="flex items-center justify-between z-10 shrink-0">
+              <h1 className="text-[20px] font-extrabold flex items-center tracking-tight text-slate-800">
+                <div className="w-8 h-8 rounded-[10px] bg-indigo-600 flex items-center justify-center mr-3 shadow-md shadow-indigo-200 relative overflow-hidden">
+                  <Icon name="Sparkles" className="w-5 h-5 text-white" strokeWidth={2} />
+                </div>
+                一文多图
+              </h1>
+              <button onClick={() => setIsConfigOpen(true)} className="w-10 h-10 rounded-xl bg-white/80 hover:bg-white text-slate-400 hover:text-indigo-600 transition-all duration-300 shadow-sm border border-white/60 flex items-center justify-center active:scale-95 backdrop-blur-sm">
+                <Icon name="Settings" className="w-5 h-5" strokeWidth={2} />
+              </button>
+            </div>
+
+            <div className="flowing-border-wrapper mt-8 mb-4">
+              <textarea
+                className="flowing-border-inner w-full h-[180px] p-4 text-[14px] resize-none text-slate-800 placeholder-slate-400 focus:placeholder-slate-300 custom-scrollbar"
+                placeholder="在此注入原始长文，唤醒 AI 重塑引擎..."
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                disabled={isProcessing}
+                spellCheck="false"
+              />
+            </div>
+
+            <button
+              onClick={handleStartProcessing}
+              disabled={isButtonDisabled}
+              className={`w-full h-12 shrink-0 rounded-xl font-bold text-[14px] flex items-center justify-center transition-all duration-300 relative overflow-hidden z-10 backdrop-blur-sm
+                ${isButtonDisabled
+                  ? 'bg-white/50 text-slate-400 cursor-not-allowed border border-white/60 shadow-none' 
+                  : 'bg-indigo-600/90 hover:bg-indigo-600 text-white shadow-md hover:shadow-lg transform hover:-translate-y-0.5 border border-indigo-500/50'}`}
+            >
+              {isProcessing ? (
+                 <><Icon name="RefreshCw" className="w-4 h-4 mr-2 text-slate-400 animate-spin" /> 引擎静默运算中...</>
+              ) : (
+                 <><Icon name="Zap" className={`w-4 h-4 mr-2 ${isButtonDisabled ? 'text-slate-400' : 'text-white'}`} strokeWidth={2} />一键提取提示词物料包</>
+              )}
+            </button>
+
+            <div className="mt-10 flex-1 relative shrink-0 flex flex-col min-h-0">
+              <div className="flex items-center text-[12px] font-bold text-slate-400 mb-4 tracking-wide uppercase shrink-0">
+                历史记录
+              </div>
+              <div className="space-y-3 overflow-y-auto custom-scrollbar flex-1 pb-4 pr-1">
+                {history.length === 0 && <div className="text-[13px] text-slate-400 italic text-center mt-6">暂无历史记录</div>}
+                {history.map(item => (
+                  <div 
+                    key={item.id}
+                    className={`relative group p-3.5 rounded-xl transition-all duration-200 border backdrop-blur-sm shrink-0
+                      ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                      ${activeHistoryId === item.id && showResults 
+                        ? 'bg-white/80 border-white/80 shadow-sm' 
+                        : 'bg-white/30 border-white/40 hover:bg-white/60 hover:border-white/60'}`}
+                    onClick={() => !isProcessing && loadHistoryItem(item.id)}
+                  >
+                    <div className="pr-16">
+                      <div className={`text-[13px] font-bold truncate flex items-center ${activeHistoryId === item.id && showResults ? 'text-indigo-600' : 'text-slate-700'}`}>
+                        {item.title || '未命名'}
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-1.5 font-mono">{item.date}</div>
+                    </div>
+                    {!isProcessing && (
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (item.originalInput) {
+                              handleStartProcessing(item.originalInput);
+                            } else {
+                              setToast({ message: '该记录较早，缺少原文备份，无法重试', type: 'error' });
+                            }
+                          }}
+                          className="w-7 h-7 bg-indigo-50/80 text-indigo-500 rounded-lg flex items-center justify-center transition-all hover:bg-indigo-100 hover:text-indigo-600 shadow-sm border border-indigo-100/50"
+                          title="再次生成"
+                        >
+                          <Icon name="RefreshCw" className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => deleteHistoryItem(item.id, e)}
+                          className="w-7 h-7 bg-red-50/80 text-red-500 rounded-lg flex items-center justify-center transition-all hover:bg-red-100 hover:text-red-600 shadow-sm border border-red-100/50"
+                          title="删除记录"
+                        >
+                          <Icon name="Trash2" className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+          </div>
+
+          <div className="flex-1 flex flex-col relative h-full z-10 overflow-hidden">
+            
+            {isProcessing && !showResults && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-50/60 backdrop-blur-xl animate-fade-in">
+                <div className="relative w-40 h-40 mb-12 flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full border border-slate-200/60 shadow-[inset_0_0_20px_rgba(99,102,241,0.1)]"></div>
+                  <div className="absolute inset-0 rounded-full border-t-[3px] border-indigo-600 animate-spin" style={{ animationDuration: '2s' }}></div>
+                  <div className="absolute inset-4 rounded-full border-b-[2px] border-sky-400 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '3s' }}></div>
+                  <div className="relative z-10 bg-white/90 shadow-xl rounded-2xl w-16 h-16 flex items-center justify-center border border-white/80 backdrop-blur-md">
+                     <Icon name={internalStage >= 5 ? "Image" : internalStage >= 3 ? "Cpu" : "Database"} className="w-8 h-8 text-indigo-600 animate-pulse-slow" strokeWidth={1.5} />
+                  </div>
+                </div>
+                
+                <div className="text-center space-y-3">
+                  <h3 className="text-[18px] font-extrabold text-slate-800 tracking-tight transition-all duration-300">{STAGE_LOADING_TEXT[internalStage] || "连接核心计算引擎..."}</h3>
+                  <div className="w-64 h-1.5 bg-slate-200/50 rounded-full overflow-hidden mx-auto mt-6 backdrop-blur-sm">
+                    <div className="h-full bg-gradient-to-r from-indigo-500 to-sky-400 transition-all duration-500 ease-out" style={{ width: `${(internalStage / 6) * 100}%` }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showResults && (
+              <div className="w-full pl-8 pr-[calc(2rem+5px)] md:pl-12 md:pr-[calc(3rem+5px)] pt-8 pb-4 z-20 shrink-0 relative animate-fade-in-down">
+                <div className="max-w-3xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                  
+                  <div className="flex items-center gap-1.5 p-1.5 bg-white/40 backdrop-blur-md border border-white/60 rounded-[1.25rem] shadow-sm overflow-x-auto hide-scrollbar">
+                    {NEW_STAGES.map((stage) => {
+                      const isActive = activeStageTab === stage.id;
+                      const isClickable = !currentSession.isHalted || stage.id === 'step1';
+
+                      return (
+                        <button 
+                          key={stage.id}
+                          onClick={() => { if(isClickable) setActiveStageTab(stage.id); }}
+                          className={`flex items-center justify-center h-10 px-5 rounded-xl transition-all duration-300 whitespace-nowrap shrink-0
+                            ${isClickable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}
+                            ${isActive 
+                              ? 'bg-indigo-600/90 text-white shadow-md shadow-indigo-200/50' 
+                              : 'bg-transparent text-slate-600 hover:bg-white/60 hover:text-indigo-600'}
+                          `}
+                        >
+                          <Icon name={stage.icon} className={`w-4 h-4 mr-2 transition-colors ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                          <span className="text-[13px] font-bold tracking-wide">{stage.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeStageTab === 'step3' && currentSession.stages[5] && (
+                    <button 
+                      onClick={() => copyToClipboard(getCleanAllPrompts(currentSession.stages[5]), '全套指令')} 
+                      className="flex items-center justify-center h-10 px-5 bg-white/80 hover:bg-white text-indigo-600 rounded-xl text-[13px] font-bold transition-all shadow-sm active:scale-95 border border-white/80 shrink-0"
+                    >
+                      <Icon name="Copy" className="w-4 h-4 mr-2 text-indigo-500" /> 复制全部
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className={`flex-1 px-8 md:px-12 pb-10 custom-scrollbar relative z-10 transform-gpu ${showResults ? 'overflow-y-scroll pt-2' : 'overflow-y-auto pt-8'}`}>
+              <div className="max-w-3xl mx-auto h-full">
+                
+                {!isProcessing && !showResults && (
+                  <div className="h-full flex flex-col items-center justify-center animate-fade-in -mt-10">
+                    <div className="w-20 h-20 bg-white/80 backdrop-blur-xl rounded-[1.5rem] shadow-sm border border-white/80 flex items-center justify-center mb-8 relative">
+                      <div className="absolute inset-0 bg-indigo-50/50 rounded-[1.5rem] opacity-50 blur"></div>
+                      <Icon name="Bot" className="w-10 h-10 text-indigo-500 relative z-10" strokeWidth={1.5} />
+                    </div>
+                    <h2 className="text-[28px] font-extrabold text-slate-900 mb-4 tracking-tight">内容精炼与结构化 <span className="text-indigo-600">Agent</span></h2>
+                    <p className="text-[15px] text-slate-500 mb-12 max-w-lg text-center leading-relaxed">深度重构长文逻辑，后台运算完毕后，一键交付结构化卡片与生产级 Midjourney 视觉指令。</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+                      {[{ icon: 'ListChecks', title: '深度事实核查', desc: '全网交叉验证，剔除过时与错误信息。' }, { icon: 'Cpu', title: '逻辑精炼重构', desc: '提炼分论点与核心比喻，生成卡片物料包。' }, { icon: 'Image', title: '视觉指令映射', desc: '色彩、构图全量生成 3:4 画面生图提示词。' }].map((feature, idx) => (
+                        <div key={idx} className="bg-white/60 backdrop-blur-xl rounded-2xl p-6 border border-white/80 shadow-sm hover:shadow-md transition-shadow">
+                          <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center mb-4 border border-white/80 shadow-sm"><Icon name={feature.icon} className="w-5 h-5 text-indigo-600" /></div>
+                          <h4 className="text-[15px] font-bold text-slate-800 mb-2">{feature.title}</h4>
+                          <p className="text-[13px] text-slate-500 leading-relaxed">{feature.desc}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {showResults && (
+                  <div className="animate-fade-in-up pb-20">
+                    {renderStageContent()}
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+          </div>
+
+          {/* 设置面板弹窗：调整了大小与布局以适应大段 Prompt 配置 */}
+          {isConfigOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in">
+              <div className="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in-down border border-white/60">
+                
+                {/* 弹窗 Header */}
+                <div className="px-6 py-5 border-b border-slate-200/50 flex items-center justify-between bg-white/50 shrink-0">
+                  <h3 className="text-[16px] font-extrabold text-slate-800 flex items-center">
+                    <Icon name="Settings" className="w-5 h-5 mr-2 text-indigo-600" /> 私有引擎及技能配置
+                  </h3>
+                  <button onClick={() => setIsConfigOpen(false)} className="text-slate-400 hover:text-slate-700 w-8 h-8 rounded-lg hover:bg-slate-200/50 transition-colors flex items-center justify-center">
+                    <Icon name="X" className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                {/* 弹窗 Body (可滚动) */}
+                <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar flex-1">
+                  
+                  {/* 基础 API 配置区域 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="md:col-span-2">
+                      <label className="block text-[13px] font-bold text-slate-700 mb-2">接口地址 (Endpoint)</label>
+                      <input 
+                        type="text" 
+                        value={apiConfig.apiUrl}
+                        onChange={(e) => setApiConfig({...apiConfig, apiUrl: e.target.value})}
+                        className="w-full h-12 px-4 text-[14px] rounded-xl border border-slate-200/60 bg-white/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all font-mono text-slate-600 placeholder-slate-400 focus:placeholder-slate-300"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[13px] font-bold text-slate-700 mb-2">模型名称 (Model)</label>
+                      <input 
+                        type="text" 
+                        value={apiConfig.model}
+                        onChange={(e) => setApiConfig({...apiConfig, model: e.target.value})}
+                        className="w-full h-12 px-4 text-[14px] rounded-xl border border-slate-200/60 bg-white/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all font-mono text-slate-600 placeholder-slate-400 focus:placeholder-slate-300"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[13px] font-bold text-slate-700 mb-2">密钥 (API Key)</label>
+                      <input 
+                        type="password" 
+                        value={apiConfig.apiKey}
+                        onChange={(e) => setApiConfig({...apiConfig, apiKey: e.target.value})}
+                        placeholder="sk-..."
+                        className="w-full h-12 px-4 text-[14px] rounded-xl border border-slate-200/60 bg-white/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all font-mono text-slate-600 placeholder-slate-400 focus:placeholder-slate-300"
+                      />
+                    </div>
+                  </div>
+
+                  <hr className="border-slate-200/60" />
+
+                  {/* 核心技能配置区域 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-[13px] font-bold text-slate-700">系统指令 (System Prompt)</label>
+                    </div>
+                    <textarea 
+                      value={apiConfig.systemPrompt}
+                      onChange={(e) => setApiConfig({...apiConfig, systemPrompt: e.target.value})}
+                      className="w-full h-64 p-4 text-[13px] leading-relaxed rounded-xl border border-slate-200/60 bg-white/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all font-mono text-slate-600 custom-scrollbar resize-y"
+                      placeholder="定义 Agent 的行为规范..."
+                      spellCheck="false"
+                    />
+                    <p className="text-[12px] text-slate-400 mt-2">
+                      在此处深度定制 Agent 的思考逻辑、判型规则与生图提示词风格。支持 Markdown 格式。
+                    </p>
+                  </div>
+
+                </div>
+
+                {/* 弹窗 Footer */}
+                <div className="p-6 border-t border-slate-200/50 bg-slate-50/50 shrink-0">
+                  <button 
+                    onClick={handleSaveConfig}
+                    className="w-full h-12 text-[14px] rounded-xl bg-indigo-600/90 backdrop-blur-md hover:bg-indigo-600 text-white font-bold transition-all shadow-md shadow-indigo-200 transform hover:-translate-y-0.5 flex items-center justify-center border border-indigo-500/50"
+                  >
+                    保存并应用配置
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

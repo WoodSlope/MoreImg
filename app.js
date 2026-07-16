@@ -377,28 +377,87 @@ var parseStreamedText = function parseStreamedText(fullText) {
   };
 };
 var PROCESSING_MAX_OUTPUT_TOKENS = 12000;
-var PROCESSING_REQUIRED_PATTERNS = {
-  stage4: [/\*\*封面卡片\*\*/, /\*\*正文卡片\s*\d+\/\d+\*\*/, /\*\*封底卡片\*\*/],
-  stage5: [/###\s*\[?封面\]?/, /###\s*\[?正文\d+\/\d+\]?/, /###\s*\[?封底\]?/]
+var parsePromptSections = function parsePromptSections() {
+  var content = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : '';
+  var source = String(content || '');
+  var headingSections = [];
+  var headingRegex = /###\s*\[?((?:封面|正文\d+\/\d+|封底))\]?\s*([\s\S]*?)(?=###|$)/g;
+  var match;
+  while ((match = headingRegex.exec(source)) !== null) {
+    headingSections.push({
+      title: match[1].trim(),
+      text: match[2].trim()
+    });
+  }
+  var parseBracketSections = function parseBracketSections(value) {
+    var items = [];
+    var bracketRegex = /\[((?:封面|正文\d+\/\d+|封底))\]\s*([\s\S]*?)(?=\[(?:封面|正文\d+\/\d+|封底)\]|$)/g;
+    while ((match = bracketRegex.exec(value)) !== null) {
+      items.push({
+        title: match[1].trim(),
+        text: match[2].trim()
+      });
+    }
+    return items;
+  };
+  var codeBlockSources = _toConsumableArray(source.matchAll(/```[^\n]*\n([\s\S]*?)```/g)).map(function (block) {
+    return block[1];
+  });
+  var bracketCandidates = [].concat(_toConsumableArray(codeBlockSources.map(parseBracketSections)), [parseBracketSections(source)]);
+  var plainHeaderRegex = /(?:^|\n)\s*(?:#{1,6}\s*)?(封面|正文\d+\/\d+|封底)(?:提示词)?\s*[：:]?\s*(?=\n|$)/g;
+  var headers = _toConsumableArray(source.matchAll(plainHeaderRegex));
+  var plainSections = headers.map(function (header, index) {
+    var _headers$index, _headers;
+    var blockStart = header.index + header[0].length;
+    var blockEnd = (_headers$index = (_headers = headers[index + 1]) === null || _headers === void 0 ? void 0 : _headers.index) !== null && _headers$index !== void 0 ? _headers$index : source.length;
+    return {
+      title: header[1].trim(),
+      text: source.slice(blockStart, blockEnd).trim()
+    };
+  });
+  var dedupeSections = function dedupeSections(items) {
+    var seen = new Set();
+    return items.filter(function (section) {
+      if (!section.title || !section.text || seen.has(section.title)) return false;
+      seen.add(section.title);
+      return true;
+    });
+  };
+  return [headingSections].concat(_toConsumableArray(bracketCandidates), [plainSections]).map(dedupeSections).sort(function (left, right) {
+    return right.length - left.length;
+  })[0] || [];
 };
 var assessProcessingResult = function assessProcessingResult(fullText) {
+  var _parsed$stages$, _parsed$stages$2;
   var text = String(fullText || '').trim();
   var parsed = parseStreamedText(text);
   var isRejected = parsed.latestStage === 1 && /(不适合|不通过|不足以|建议提供|暂不适合)/.test(parsed.stages[1] || '');
-  var hasStage4 = PROCESSING_REQUIRED_PATTERNS.stage4.every(function (pattern) {
-    return pattern.test(parsed.stages[4] || '');
-  });
-  var hasStage5 = PROCESSING_REQUIRED_PATTERNS.stage5.every(function (pattern) {
-    return pattern.test(parsed.stages[5] || '');
-  });
+  var hasStage4 = Boolean((_parsed$stages$ = parsed.stages[4]) === null || _parsed$stages$ === void 0 ? void 0 : _parsed$stages$.trim());
+  var hasStage5 = Boolean((_parsed$stages$2 = parsed.stages[5]) === null || _parsed$stages$2 === void 0 ? void 0 : _parsed$stages$2.trim());
+  var parsedCards = parseCardPackage(parsed.stages[4]);
+  var parsedPrompts = parsePromptSections(parsed.stages[5]);
+  var cardTypes = new Set(parsedCards.map(function (card) {
+    return card.type;
+  }));
+  var promptTitles = new Set(parsedPrompts.map(function (section) {
+    return section.title;
+  }));
+  var hasUsableCards = cardTypes.has('cover') && cardTypes.has('body') && cardTypes.has('back');
+  var hasUsablePrompts = promptTitles.has('封面') && _toConsumableArray(promptTitles).some(function (title) {
+    return /^正文\d+\/\d+$/.test(title);
+  }) && promptTitles.has('封底');
   var hasFormatError = text.includes('接口返回格式异常');
-  var isComplete = hasStage4 && hasStage5 && !hasFormatError;
+  var isComplete = hasUsableCards && hasUsablePrompts && !hasFormatError;
+  var canContinue = hasStage4 && hasStage5 && !hasFormatError;
+  var warning = canContinue && !isComplete ? '内容已生成，但部分卡片或提示词格式不标准，请在生图前检查。' : '';
   return {
     parsed: parsed,
     isComplete: isComplete,
+    canContinue: canContinue,
+    warning: warning,
     isRejected: isRejected,
-    shouldRetry: Boolean(text) && !isComplete && !isRejected,
-    reason: hasFormatError ? '接口返回格式异常' : !hasStage4 ? '阶段4卡片结构不完整' : !hasStage5 ? '阶段5提示词结构不完整' : ''
+    shouldRetry: Boolean(text) && !canContinue && !isRejected,
+    reason: hasFormatError ? '接口返回格式异常' : !hasStage4 ? '尚未生成阶段4卡片内容' : !hasStage5 ? '尚未生成阶段5提示词内容' : ''
   };
 };
 var applyProcessingFinishReason = function applyProcessingFinishReason(assessment) {
@@ -410,6 +469,8 @@ var applyProcessingFinishReason = function applyProcessingFinishReason(assessmen
   });
   return _objectSpread(_objectSpread({}, assessment), {}, {
     isComplete: false,
+    canContinue: false,
+    warning: '',
     shouldRetry: true,
     reason: "\u8F93\u51FA\u8FBE\u5230 ".concat(PROCESSING_MAX_OUTPUT_TOKENS, " Token \u4E0A\u9650"),
     finishReason: normalizedFinishReason
@@ -435,7 +496,35 @@ var isResponsesApiEndpoint = function isResponsesApiEndpoint() {
   var apiUrl = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : '';
   return /\/responses(?:[/?#]|$)/i.test(String(apiUrl).trim());
 };
+var deriveModelsEndpoint = function deriveModelsEndpoint() {
+  var apiUrl = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : '';
+  var normalizedUrl = String(apiUrl || '').trim();
+  if (!normalizedUrl) return '';
+  var url = new URL(normalizedUrl);
+  var suffixes = ['/chat/completions', '/images/generations', '/responses'];
+  var matchingSuffix = suffixes.find(function (suffix) {
+    return url.pathname.replace(/\/$/, '').endsWith(suffix);
+  });
+  if (matchingSuffix) {
+    url.pathname = "".concat(url.pathname.replace(/\/$/, '').slice(0, -matchingSuffix.length), "/models");
+  } else {
+    url.pathname = "".concat(url.pathname.replace(/\/$/, ''), "/models");
+  }
+  url.search = '';
+  url.hash = '';
+  return url.toString().replace(/\/$/, '');
+};
+var extractModelIds = function extractModelIds() {
+  var data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
+  var rawModels = Array.isArray(data.data) ? data.data : Array.isArray(data.models) ? data.models : [];
+  return _toConsumableArray(new Set(rawModels.map(function (item) {
+    return typeof item === 'string' ? item : (item === null || item === void 0 ? void 0 : item.id) || (item === null || item === void 0 ? void 0 : item.name) || '';
+  }).map(function (item) {
+    return String(item).trim();
+  }).filter(Boolean)));
+};
 var buildProcessingRequestBody = function buildProcessingRequestBody(apiUrl, model, messages) {
+  var maxOutputTokens = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : PROCESSING_MAX_OUTPUT_TOKENS;
   if (isResponsesApiEndpoint(apiUrl)) {
     var instructions = messages.filter(function (message) {
       return message.role === 'system';
@@ -457,7 +546,7 @@ var buildProcessingRequestBody = function buildProcessingRequestBody(apiUrl, mod
     } : {}), {}, {
       input: input,
       stream: false,
-      max_output_tokens: PROCESSING_MAX_OUTPUT_TOKENS
+      max_output_tokens: maxOutputTokens
     });
   }
   var requestBody = {
@@ -467,7 +556,7 @@ var buildProcessingRequestBody = function buildProcessingRequestBody(apiUrl, mod
     temperature: 0.7
   };
   var usesCompletionTokenLimit = /^(?:gpt-5|o\d)/i.test(String(model || '').trim());
-  if (usesCompletionTokenLimit) requestBody.max_completion_tokens = PROCESSING_MAX_OUTPUT_TOKENS;else requestBody.max_tokens = PROCESSING_MAX_OUTPUT_TOKENS;
+  if (usesCompletionTokenLimit) requestBody.max_completion_tokens = maxOutputTokens;else requestBody.max_tokens = maxOutputTokens;
   return requestBody;
 };
 var extractProcessingResponseText = function extractProcessingResponseText() {
@@ -573,13 +662,13 @@ var readCardPoints = function readCardPoints(block) {
 };
 var parseCardPackage = function parseCardPackage(content) {
   if (!content) return [];
-  var headerRegex = /\*\*(封面卡片|正文卡片\s*\d+\/\d+|封底卡片)\*\*/g;
+  var headerRegex = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:\*\*)?(封面卡片|正文卡片\s*\d+\/\d+|封底卡片)(?:\*\*)?\s*[：:]?\s*(?=\n|$)/g;
   var headers = _toConsumableArray(content.matchAll(headerRegex));
   return headers.map(function (header, index) {
-    var _headers$index, _headers;
+    var _headers$index2, _headers2;
     var label = header[1].replace(/\s+/g, ' ').trim();
     var blockStart = header.index + header[0].length;
-    var blockEnd = (_headers$index = (_headers = headers[index + 1]) === null || _headers === void 0 ? void 0 : _headers.index) !== null && _headers$index !== void 0 ? _headers$index : content.length;
+    var blockEnd = (_headers$index2 = (_headers2 = headers[index + 1]) === null || _headers2 === void 0 ? void 0 : _headers2.index) !== null && _headers$index2 !== void 0 ? _headers$index2 : content.length;
     var block = content.slice(blockStart, blockEnd).trim();
     var isCover = label === '封面卡片';
     var isBack = label === '封底卡片';
@@ -672,6 +761,17 @@ var Toast = function Toast(_ref4) {
     className: "font-semibold text-[14px]"
   }, message));
 };
+var ConfigStatus = function ConfigStatus(_ref5) {
+  var state = _ref5.state;
+  if (!state || state.status === 'idle') return null;
+  var iconName = state.status === 'loading' ? 'LoaderCircle' : state.status === 'success' ? 'CheckCircle2' : 'AlertCircle';
+  return React.createElement("div", {
+    className: "config-status config-status-".concat(state.status)
+  }, React.createElement(Icon, {
+    name: iconName,
+    className: "mt-0.5 h-3.5 w-3.5 shrink-0 ".concat(state.status === 'loading' ? 'animate-spin' : '')
+  }), React.createElement("span", null, state.message));
+};
 function App() {
   var _useState = useState({
       apiUrl: 'https://api.deepseek.com/v1/chat/completions',
@@ -730,11 +830,36 @@ function App() {
     _useState22 = _slicedToArray(_useState21, 2),
     hiddenFullImages = _useState22[0],
     setHiddenFullImages = _useState22[1];
-  var _useState23 = useState(false),
+  var _useState23 = useState([]),
     _useState24 = _slicedToArray(_useState23, 2),
-    isInputFocused = _useState24[0],
-    setIsInputFocused = _useState24[1];
-  var _useState25 = useState({
+    textModels = _useState24[0],
+    setTextModels = _useState24[1];
+  var _useState25 = useState([]),
+    _useState26 = _slicedToArray(_useState25, 2),
+    imageModels = _useState26[0],
+    setImageModels = _useState26[1];
+  var _useState27 = useState({
+      textModels: {
+        status: 'idle',
+        message: ''
+      },
+      imageModels: {
+        status: 'idle',
+        message: ''
+      },
+      textTest: {
+        status: 'idle',
+        message: ''
+      }
+    }),
+    _useState28 = _slicedToArray(_useState27, 2),
+    configTools = _useState28[0],
+    setConfigTools = _useState28[1];
+  var _useState29 = useState(false),
+    _useState30 = _slicedToArray(_useState29, 2),
+    isInputFocused = _useState30[0],
+    setIsInputFocused = _useState30[1];
+  var _useState31 = useState({
       rawText: '',
       stages: {
         1: '',
@@ -745,16 +870,22 @@ function App() {
         6: ''
       },
       isHalted: false,
-      stopReason: ''
+      stopReason: '',
+      warning: ''
     }),
-    _useState26 = _slicedToArray(_useState25, 2),
-    currentSession = _useState26[0],
-    setCurrentSession = _useState26[1];
+    _useState32 = _slicedToArray(_useState31, 2),
+    currentSession = _useState32[0],
+    setCurrentSession = _useState32[1];
   var messagesEndRef = useRef(null);
   var imageObjectUrlsRef = useRef([]);
   var htmlCardRefs = useRef({});
   var systemPromptRef = useRef(null);
   var resultScrollRef = useRef(null);
+  var updateConfigTool = function updateConfigTool(key, nextState) {
+    setConfigTools(function (prev) {
+      return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, key, _objectSpread(_objectSpread({}, prev[key]), nextState)));
+    });
+  };
   useEffect(function () {
     if (!isConfigOpen || !systemPromptRef.current) return;
     var promptEditor = systemPromptRef.current;
@@ -879,14 +1010,180 @@ function App() {
       });
     });
   };
+  var handleLoadModels = function () {
+    var _handleLoadModels = _asyncToGenerator(_regenerator().m(function _callee5(kind) {
+      var isImage, endpoint, apiKey, stateKey, setModels, _data$error, modelsEndpoint, response, data, modelIds, _t2;
+      return _regenerator().w(function (_context5) {
+        while (1) switch (_context5.p = _context5.n) {
+          case 0:
+            isImage = kind === 'image';
+            endpoint = isImage ? apiConfig.imageApiUrl.trim() : apiConfig.apiUrl.trim();
+            apiKey = isImage ? apiConfig.imageApiKey.trim() : apiConfig.apiKey.trim();
+            stateKey = isImage ? 'imageModels' : 'textModels';
+            setModels = isImage ? setImageModels : setTextModels;
+            if (!(!endpoint || !apiKey)) {
+              _context5.n = 1;
+              break;
+            }
+            updateConfigTool(stateKey, {
+              status: 'error',
+              message: '请先填写接口地址和 API Key。'
+            });
+            return _context5.a(2);
+          case 1:
+            updateConfigTool(stateKey, {
+              status: 'loading',
+              message: '正在读取模型列表...'
+            });
+            _context5.p = 2;
+            modelsEndpoint = deriveModelsEndpoint(endpoint);
+            _context5.n = 3;
+            return fetch(modelsEndpoint, {
+              method: 'GET',
+              headers: {
+                'Authorization': "Bearer ".concat(apiKey)
+              }
+            });
+          case 3:
+            response = _context5.v;
+            _context5.n = 4;
+            return response.json()["catch"](function () {
+              return {};
+            });
+          case 4:
+            data = _context5.v;
+            if (response.ok) {
+              _context5.n = 5;
+              break;
+            }
+            throw new Error((data === null || data === void 0 || (_data$error = data.error) === null || _data$error === void 0 ? void 0 : _data$error.message) || (data === null || data === void 0 ? void 0 : data.message) || "HTTP ".concat(response.status));
+          case 5:
+            modelIds = extractModelIds(data);
+            if (!(modelIds.length === 0)) {
+              _context5.n = 6;
+              break;
+            }
+            throw new Error('接口未返回可用模型');
+          case 6:
+            setModels(modelIds);
+            updateConfigTool(stateKey, {
+              status: 'success',
+              message: "\u5DF2\u8BFB\u53D6 ".concat(modelIds.length, " \u4E2A\u6A21\u578B\uFF0C\u53EF\u7EE7\u7EED\u624B\u52A8\u8F93\u5165\u6216\u4ECE\u5EFA\u8BAE\u4E2D\u9009\u62E9\u3002")
+            });
+            _context5.n = 8;
+            break;
+          case 7:
+            _context5.p = 7;
+            _t2 = _context5.v;
+            updateConfigTool(stateKey, {
+              status: 'error',
+              message: "\u8BFB\u53D6\u5931\u8D25\uFF1A".concat(_t2.message, "\u3002\u4E0D\u5F71\u54CD\u624B\u52A8\u586B\u5199\u3002")
+            });
+          case 8:
+            return _context5.a(2);
+        }
+      }, _callee5, null, [[2, 7]]);
+    }));
+    function handleLoadModels(_x7) {
+      return _handleLoadModels.apply(this, arguments);
+    }
+    return handleLoadModels;
+  }();
+  var handleTestTextConnection = function () {
+    var _handleTestTextConnection = _asyncToGenerator(_regenerator().m(function _callee6() {
+      var endpoint, model, apiKey, startedAt, _data$error2, messages, response, data, responseText, elapsedMs, preview, _t3;
+      return _regenerator().w(function (_context6) {
+        while (1) switch (_context6.p = _context6.n) {
+          case 0:
+            endpoint = apiConfig.apiUrl.trim();
+            model = apiConfig.model.trim();
+            apiKey = apiConfig.apiKey.trim();
+            if (!(!endpoint || !model || !apiKey)) {
+              _context6.n = 1;
+              break;
+            }
+            updateConfigTool('textTest', {
+              status: 'error',
+              message: '请先填写接口地址、模型和 API Key。'
+            });
+            return _context6.a(2);
+          case 1:
+            updateConfigTool('textTest', {
+              status: 'loading',
+              message: '正在发送最小测试请求...'
+            });
+            startedAt = Date.now();
+            _context6.p = 2;
+            messages = [{
+              role: 'system',
+              content: '这是连接测试。'
+            }, {
+              role: 'user',
+              content: '只回复 OK'
+            }];
+            _context6.n = 3;
+            return fetch(endpoint, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': "Bearer ".concat(apiKey)
+              },
+              body: JSON.stringify(buildProcessingRequestBody(endpoint, model, messages, 64))
+            });
+          case 3:
+            response = _context6.v;
+            _context6.n = 4;
+            return response.json()["catch"](function () {
+              return {};
+            });
+          case 4:
+            data = _context6.v;
+            if (response.ok) {
+              _context6.n = 5;
+              break;
+            }
+            throw new Error((data === null || data === void 0 || (_data$error2 = data.error) === null || _data$error2 === void 0 ? void 0 : _data$error2.message) || (data === null || data === void 0 ? void 0 : data.message) || "HTTP ".concat(response.status));
+          case 5:
+            responseText = extractProcessingResponseText(data).trim();
+            if (responseText) {
+              _context6.n = 6;
+              break;
+            }
+            throw new Error('接口成功响应，但没有可解析文本');
+          case 6:
+            elapsedMs = Date.now() - startedAt;
+            preview = responseText.replace(/\s+/g, ' ').slice(0, 48);
+            updateConfigTool('textTest', {
+              status: 'success',
+              message: "\u8FDE\u63A5\u6210\u529F\uFF0C\u8017\u65F6 ".concat(elapsedMs, " ms\uFF0C\u8FD4\u56DE\uFF1A").concat(preview)
+            });
+            _context6.n = 8;
+            break;
+          case 7:
+            _context6.p = 7;
+            _t3 = _context6.v;
+            updateConfigTool('textTest', {
+              status: 'error',
+              message: "\u6D4B\u8BD5\u5931\u8D25\uFF1A".concat(_t3.message)
+            });
+          case 8:
+            return _context6.a(2);
+        }
+      }, _callee6, null, [[2, 7]]);
+    }));
+    function handleTestTextConnection() {
+      return _handleTestTextConnection.apply(this, arguments);
+    }
+    return handleTestTextConnection;
+  }();
   var handleGenerateImage = function () {
-    var _handleGenerateImage = _asyncToGenerator(_regenerator().m(function _callee5(cardTitle, prompt) {
+    var _handleGenerateImage = _asyncToGenerator(_regenerator().m(function _callee7(cardTitle, prompt) {
       var mode,
         resultKey,
         _data$data,
         response,
         data,
-        _data$error,
+        _data$error3,
         firstImage,
         remoteUrl,
         dataUrl,
@@ -894,15 +1191,15 @@ function App() {
         sessionId,
         imageUrl,
         generationLabel,
-        _args5 = arguments,
-        _t2,
-        _t3;
-      return _regenerator().w(function (_context5) {
-        while (1) switch (_context5.p = _context5.n) {
+        _args7 = arguments,
+        _t4,
+        _t5;
+      return _regenerator().w(function (_context7) {
+        while (1) switch (_context7.p = _context7.n) {
           case 0:
-            mode = _args5.length > 2 && _args5[2] !== undefined ? _args5[2] : 'visual';
+            mode = _args7.length > 2 && _args7[2] !== undefined ? _args7[2] : 'visual';
             if (!(!apiConfig.imageApiUrl.trim() || !apiConfig.imageModel.trim() || !apiConfig.imageApiKey.trim())) {
-              _context5.n = 1;
+              _context7.n = 1;
               break;
             }
             setToast({
@@ -910,7 +1207,7 @@ function App() {
               type: 'error'
             });
             setIsConfigOpen(true);
-            return _context5.a(2);
+            return _context7.a(2);
           case 1:
             resultKey = "".concat(mode, ":").concat(cardTitle);
             setImageResults(function (prev) {
@@ -921,8 +1218,8 @@ function App() {
                 mode: mode
               }));
             });
-            _context5.p = 2;
-            _context5.n = 3;
+            _context7.p = 2;
+            _context7.n = 3;
             return fetch(apiConfig.imageApiUrl.trim(), {
               method: 'POST',
               headers: {
@@ -937,45 +1234,45 @@ function App() {
               })
             });
           case 3:
-            response = _context5.v;
-            _context5.n = 4;
+            response = _context7.v;
+            _context7.n = 4;
             return response.json();
           case 4:
-            data = _context5.v;
+            data = _context7.v;
             if (response.ok) {
-              _context5.n = 5;
+              _context7.n = 5;
               break;
             }
-            throw new Error((data === null || data === void 0 || (_data$error = data.error) === null || _data$error === void 0 ? void 0 : _data$error.message) || "HTTP ".concat(response.status));
+            throw new Error((data === null || data === void 0 || (_data$error3 = data.error) === null || _data$error3 === void 0 ? void 0 : _data$error3.message) || "HTTP ".concat(response.status));
           case 5:
             firstImage = data === null || data === void 0 || (_data$data = data.data) === null || _data$data === void 0 ? void 0 : _data$data[0];
             remoteUrl = (firstImage === null || firstImage === void 0 ? void 0 : firstImage.url) || '';
             dataUrl = firstImage !== null && firstImage !== void 0 && firstImage.b64_json ? "data:image/png;base64,".concat(firstImage.b64_json) : '';
             if (!(!remoteUrl && !dataUrl)) {
-              _context5.n = 6;
+              _context7.n = 6;
               break;
             }
             throw new Error('接口未返回 url 或 b64_json 图片数据');
           case 6:
             if (!dataUrl) {
-              _context5.n = 7;
+              _context7.n = 7;
               break;
             }
-            _t2 = dataUrlToBlob(dataUrl);
-            _context5.n = 9;
+            _t4 = dataUrlToBlob(dataUrl);
+            _context7.n = 9;
             break;
           case 7:
-            _context5.n = 8;
+            _context7.n = 8;
             return fetch(remoteUrl).then(function (imageResponse) {
               if (!imageResponse.ok) throw new Error("\u56FE\u7247\u4E0B\u8F7D\u5931\u8D25 HTTP ".concat(imageResponse.status));
               return imageResponse.blob();
             });
           case 8:
-            _t2 = _context5.v;
+            _t4 = _context7.v;
           case 9:
-            imageBlob = _t2;
+            imageBlob = _t4;
             sessionId = activeHistoryId || 'current';
-            _context5.n = 10;
+            _context7.n = 10;
             return saveImageBlob(sessionId, cardTitle, imageBlob, mode);
           case 10:
             imageUrl = URL.createObjectURL(imageBlob);
@@ -1002,30 +1299,30 @@ function App() {
               message: "[".concat(cardTitle, "] ").concat(generationLabel, "\u751F\u6210\u5B8C\u6210"),
               type: 'success'
             });
-            _context5.n = 12;
+            _context7.n = 12;
             break;
           case 11:
-            _context5.p = 11;
-            _t3 = _context5.v;
+            _context7.p = 11;
+            _t5 = _context7.v;
             setImageResults(function (prev) {
               return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, resultKey, {
                 status: 'error',
                 imageUrl: '',
-                error: _t3.message,
+                error: _t5.message,
                 mode: mode
               }));
             });
             setToast({
-              message: "\u56FE\u7247\u751F\u6210\u5931\u8D25: ".concat(_t3.message),
+              message: "\u56FE\u7247\u751F\u6210\u5931\u8D25: ".concat(_t5.message),
               type: 'error',
               duration: 5000
             });
           case 12:
-            return _context5.a(2);
+            return _context7.a(2);
         }
-      }, _callee5, null, [[2, 11]]);
+      }, _callee7, null, [[2, 11]]);
     }));
-    function handleGenerateImage(_x7, _x8) {
+    function handleGenerateImage(_x8, _x9) {
       return _handleGenerateImage.apply(this, arguments);
     }
     return handleGenerateImage;
@@ -1041,37 +1338,37 @@ function App() {
     link.remove();
   };
   var exportHtmlCard = function () {
-    var _exportHtmlCard = _asyncToGenerator(_regenerator().m(function _callee6(card) {
-      var visualResult, sourceNode, canvas, pngBlob, pngUrl, _t4;
-      return _regenerator().w(function (_context6) {
-        while (1) switch (_context6.p = _context6.n) {
+    var _exportHtmlCard = _asyncToGenerator(_regenerator().m(function _callee8(card) {
+      var visualResult, sourceNode, canvas, pngBlob, pngUrl, _t6;
+      return _regenerator().w(function (_context8) {
+        while (1) switch (_context8.p = _context8.n) {
           case 0:
             visualResult = imageResults["visual-only:".concat(card.imageKey)];
             if (!((visualResult === null || visualResult === void 0 ? void 0 : visualResult.status) !== 'success')) {
-              _context6.n = 1;
+              _context8.n = 1;
               break;
             }
             setToast({
               message: '请先生成无字主视觉',
               type: 'error'
             });
-            return _context6.a(2);
+            return _context8.a(2);
           case 1:
             sourceNode = htmlCardRefs.current[card.id];
             if (sourceNode) {
-              _context6.n = 2;
+              _context8.n = 2;
               break;
             }
-            return _context6.a(2);
+            return _context8.a(2);
           case 2:
-            _context6.p = 2;
+            _context8.p = 2;
             if (window.html2canvas) {
-              _context6.n = 3;
+              _context8.n = 3;
               break;
             }
             throw new Error('本地导出组件未加载');
           case 3:
-            _context6.n = 4;
+            _context8.n = 4;
             return window.html2canvas(sourceNode, {
               width: 1080,
               height: 1440,
@@ -1082,15 +1379,15 @@ function App() {
               logging: false
             });
           case 4:
-            canvas = _context6.v;
-            _context6.n = 5;
+            canvas = _context8.v;
+            _context8.n = 5;
             return new Promise(function (resolve) {
               return canvas.toBlob(resolve, 'image/png', 1);
             });
           case 5:
-            pngBlob = _context6.v;
+            pngBlob = _context8.v;
             if (pngBlob) {
-              _context6.n = 6;
+              _context8.n = 6;
               break;
             }
             throw new Error('PNG 编码失败');
@@ -1104,22 +1401,22 @@ function App() {
               message: "[".concat(card.label, "] HTML \u6210\u54C1\u5DF2\u5BFC\u51FA"),
               type: 'success'
             });
-            _context6.n = 8;
+            _context8.n = 8;
             break;
           case 7:
-            _context6.p = 7;
-            _t4 = _context6.v;
+            _context8.p = 7;
+            _t6 = _context8.v;
             setToast({
-              message: "\u5BFC\u51FA\u5931\u8D25: ".concat(_t4.message),
+              message: "\u5BFC\u51FA\u5931\u8D25: ".concat(_t6.message),
               type: 'error',
               duration: 5000
             });
           case 8:
-            return _context6.a(2);
+            return _context8.a(2);
         }
-      }, _callee6, null, [[2, 7]]);
+      }, _callee8, null, [[2, 7]]);
     }));
-    function exportHtmlCard(_x9) {
+    function exportHtmlCard(_x0) {
       return _exportHtmlCard.apply(this, arguments);
     }
     return exportHtmlCard;
@@ -1146,7 +1443,8 @@ function App() {
           6: ''
         },
         isHalted: false,
-        stopReason: ''
+        stopReason: '',
+        warning: ''
       });
       replaceImageResults({});
     }
@@ -1156,16 +1454,16 @@ function App() {
     });
   };
   var requestProcessingText = function () {
-    var _requestProcessingText = _asyncToGenerator(_regenerator().m(function _callee7(messages) {
-      var fullResponseText, rawBuffer, isStreamedData, finishReason, response, errorMsg, _errorData$error, errorData, reader, decoder, streamBuffer, _yield$reader$read, done, value, dataStr, data, chunk, lines, _iterator2, _step2, _loop, _ret, _data2, parsed, _t6, _t7;
-      return _regenerator().w(function (_context8) {
-        while (1) switch (_context8.p = _context8.n) {
+    var _requestProcessingText = _asyncToGenerator(_regenerator().m(function _callee9(messages) {
+      var fullResponseText, rawBuffer, isStreamedData, finishReason, response, errorMsg, _errorData$error, errorData, reader, decoder, streamBuffer, _yield$reader$read, done, value, dataStr, data, chunk, lines, _iterator2, _step2, _loop, _ret, _data2, parsed, _t8, _t9;
+      return _regenerator().w(function (_context0) {
+        while (1) switch (_context0.p = _context0.n) {
           case 0:
             fullResponseText = '';
             rawBuffer = '';
             isStreamedData = false;
             finishReason = '';
-            _context8.n = 1;
+            _context0.n = 1;
             return fetch(apiConfig.apiUrl.trim(), {
               method: 'POST',
               headers: {
@@ -1175,23 +1473,23 @@ function App() {
               body: JSON.stringify(buildProcessingRequestBody(apiConfig.apiUrl, apiConfig.model.trim(), messages))
             });
           case 1:
-            response = _context8.v;
+            response = _context0.v;
             if (response.ok) {
-              _context8.n = 6;
+              _context0.n = 6;
               break;
             }
             errorMsg = response.statusText;
-            _context8.p = 2;
-            _context8.n = 3;
+            _context0.p = 2;
+            _context0.n = 3;
             return response.json();
           case 3:
-            errorData = _context8.v;
+            errorData = _context0.v;
             if ((_errorData$error = errorData.error) !== null && _errorData$error !== void 0 && _errorData$error.message) errorMsg = errorData.error.message;else if (errorData.message) errorMsg = errorData.message;
-            _context8.n = 5;
+            _context0.n = 5;
             break;
           case 4:
-            _context8.p = 4;
-            _t6 = _context8.v;
+            _context0.p = 4;
+            _t8 = _context0.v;
           case 5:
             throw new Error("(HTTP ".concat(response.status, ") ").concat(errorMsg));
           case 6:
@@ -1200,17 +1498,17 @@ function App() {
             streamBuffer = '';
           case 7:
             if (!true) {
-              _context8.n = 18;
+              _context0.n = 18;
               break;
             }
-            _context8.n = 8;
+            _context0.n = 8;
             return reader.read();
           case 8:
-            _yield$reader$read = _context8.v;
+            _yield$reader$read = _context0.v;
             done = _yield$reader$read.done;
             value = _yield$reader$read.value;
             if (!done) {
-              _context8.n = 9;
+              _context0.n = 9;
               break;
             }
             if (streamBuffer.trim().startsWith('data:')) {
@@ -1223,7 +1521,7 @@ function App() {
                 }
               } catch (e) {}
             }
-            return _context8.a(3, 18);
+            return _context0.a(3, 18);
           case 9:
             chunk = decoder.decode(value, {
               stream: true
@@ -1233,32 +1531,32 @@ function App() {
             lines = streamBuffer.split('\n');
             streamBuffer = lines.pop();
             _iterator2 = _createForOfIteratorHelper(lines);
-            _context8.p = 10;
+            _context0.p = 10;
             _loop = _regenerator().m(function _loop() {
-              var line, _dataStr, _data, delta, parsed, _t5;
-              return _regenerator().w(function (_context7) {
-                while (1) switch (_context7.p = _context7.n) {
+              var line, _dataStr, _data, delta, parsed, _t7;
+              return _regenerator().w(function (_context9) {
+                while (1) switch (_context9.p = _context9.n) {
                   case 0:
                     line = _step2.value;
                     line = line.trim();
                     if (!(!line || line === 'data: [DONE]')) {
-                      _context7.n = 1;
+                      _context9.n = 1;
                       break;
                     }
-                    return _context7.a(2, 0);
+                    return _context9.a(2, 0);
                   case 1:
                     if (!line.startsWith('data:')) {
-                      _context7.n = 5;
+                      _context9.n = 5;
                       break;
                     }
                     isStreamedData = true;
-                    _context7.p = 2;
+                    _context9.p = 2;
                     _dataStr = line.substring(5).trim();
                     if (!(_dataStr === '[DONE]')) {
-                      _context7.n = 3;
+                      _context9.n = 3;
                       break;
                     }
-                    return _context7.a(2, 0);
+                    return _context9.a(2, 0);
                   case 3:
                     _data = JSON.parse(_dataStr);
                     finishReason = extractProcessingFinishReason(_data) || finishReason;
@@ -1274,47 +1572,47 @@ function App() {
                       });
                       setInternalStage(parsed.latestStage || 1);
                     }
-                    _context7.n = 5;
+                    _context9.n = 5;
                     break;
                   case 4:
-                    _context7.p = 4;
-                    _t5 = _context7.v;
-                    console.warn('流数据片段解析失败（跳过等待拼接）:', _t5);
+                    _context9.p = 4;
+                    _t7 = _context9.v;
+                    console.warn('流数据片段解析失败（跳过等待拼接）:', _t7);
                   case 5:
-                    return _context7.a(2);
+                    return _context9.a(2);
                 }
               }, _loop, null, [[2, 4]]);
             });
             _iterator2.s();
           case 11:
             if ((_step2 = _iterator2.n()).done) {
-              _context8.n = 14;
+              _context0.n = 14;
               break;
             }
-            return _context8.d(_regeneratorValues(_loop()), 12);
+            return _context0.d(_regeneratorValues(_loop()), 12);
           case 12:
-            _ret = _context8.v;
+            _ret = _context0.v;
             if (!(_ret === 0)) {
-              _context8.n = 13;
+              _context0.n = 13;
               break;
             }
-            return _context8.a(3, 13);
+            return _context0.a(3, 13);
           case 13:
-            _context8.n = 11;
+            _context0.n = 11;
             break;
           case 14:
-            _context8.n = 16;
+            _context0.n = 16;
             break;
           case 15:
-            _context8.p = 15;
-            _t7 = _context8.v;
-            _iterator2.e(_t7);
+            _context0.p = 15;
+            _t9 = _context0.v;
+            _iterator2.e(_t9);
           case 16:
-            _context8.p = 16;
+            _context0.p = 16;
             _iterator2.f();
-            return _context8.f(16);
+            return _context0.f(16);
           case 17:
-            _context8.n = 7;
+            _context0.n = 7;
             break;
           case 18:
             if (!isStreamedData && rawBuffer.trim()) {
@@ -1335,25 +1633,25 @@ function App() {
               setInternalStage(parsed.latestStage || 1);
             }
             if (fullResponseText.trim()) {
-              _context8.n = 19;
+              _context0.n = 19;
               break;
             }
             throw new Error('大模型未返回任何有效内容，请检查接口配置或稍后重试。');
           case 19:
-            return _context8.a(2, {
+            return _context0.a(2, {
               text: fullResponseText,
               finishReason: finishReason
             });
         }
-      }, _callee7, null, [[10, 15, 16, 17], [2, 4]]);
+      }, _callee9, null, [[10, 15, 16, 17], [2, 4]]);
     }));
-    function requestProcessingText(_x0) {
+    function requestProcessingText(_x1) {
       return _requestProcessingText.apply(this, arguments);
     }
     return requestProcessingText;
   }();
   var handleStartProcessing = function () {
-    var _handleStartProcessing = _asyncToGenerator(_regenerator().m(function _callee8() {
+    var _handleStartProcessing = _asyncToGenerator(_regenerator().m(function _callee0() {
       var overrideText,
         textToProcess,
         newSessionId,
@@ -1365,17 +1663,18 @@ function App() {
         finalParsed,
         isHalted,
         stopReason,
+        warning,
         newHistoryItem,
         updatedHistory,
-        _args9 = arguments,
-        _t8;
-      return _regenerator().w(function (_context9) {
-        while (1) switch (_context9.p = _context9.n) {
+        _args1 = arguments,
+        _t0;
+      return _regenerator().w(function (_context1) {
+        while (1) switch (_context1.p = _context1.n) {
           case 0:
-            overrideText = _args9.length > 0 && _args9[0] !== undefined ? _args9[0] : null;
+            overrideText = _args1.length > 0 && _args1[0] !== undefined ? _args1[0] : null;
             textToProcess = (typeof overrideText === 'string' ? overrideText : inputText).trim();
             if (apiConfig.apiKey) {
-              _context9.n = 1;
+              _context1.n = 1;
               break;
             }
             setToast({
@@ -1383,10 +1682,10 @@ function App() {
               type: 'error'
             });
             setIsConfigOpen(true);
-            return _context9.a(2);
+            return _context1.a(2);
           case 1:
             if (apiConfig.systemPrompt.trim()) {
-              _context9.n = 2;
+              _context1.n = 2;
               break;
             }
             setToast({
@@ -1394,17 +1693,17 @@ function App() {
               type: 'error'
             });
             setIsConfigOpen(true);
-            return _context9.a(2);
+            return _context1.a(2);
           case 2:
             if (textToProcess) {
-              _context9.n = 3;
+              _context1.n = 3;
               break;
             }
             setToast({
               message: '请输入需分析的长文',
               type: 'error'
             });
-            return _context9.a(2);
+            return _context1.a(2);
           case 3:
             setInputText(textToProcess);
             setIsProcessing(true);
@@ -1422,11 +1721,12 @@ function App() {
                 6: ''
               },
               isHalted: false,
-              stopReason: ''
+              stopReason: '',
+              warning: ''
             });
             replaceImageResults({});
             newSessionId = Date.now().toString();
-            _context9.p = 4;
+            _context1.p = 4;
             initialMessages = [{
               role: 'system',
               content: apiConfig.systemPrompt
@@ -1434,15 +1734,15 @@ function App() {
               role: 'user',
               content: "\u8BF7\u5904\u7406\u4EE5\u4E0B\u6587\u7AE0\uFF1A\n\n".concat(textToProcess)
             }];
-            _context9.n = 5;
+            _context1.n = 5;
             return requestProcessingText(initialMessages);
           case 5:
-            processingResult = _context9.v;
+            processingResult = _context1.v;
             _fullResponseText = processingResult.text;
             assessment = applyProcessingFinishReason(assessProcessingResult(_fullResponseText), processingResult.finishReason);
             retryCount = 0;
             if (!assessment.shouldRetry) {
-              _context9.n = 7;
+              _context1.n = 7;
               break;
             }
             retryCount = 1;
@@ -1463,24 +1763,27 @@ function App() {
                 6: ''
               },
               isHalted: false,
-              stopReason: ''
+              stopReason: '',
+              warning: ''
             });
-            _context9.n = 6;
+            _context1.n = 6;
             return requestProcessingText(buildProcessingMessages(textToProcess, _fullResponseText, apiConfig.systemPrompt));
           case 6:
-            processingResult = _context9.v;
+            processingResult = _context1.v;
             _fullResponseText = processingResult.text;
             assessment = applyProcessingFinishReason(assessProcessingResult(_fullResponseText), processingResult.finishReason);
           case 7:
             finalParsed = assessment.parsed;
-            isHalted = !assessment.isComplete;
+            isHalted = !assessment.canContinue;
             stopReason = assessment.isRejected ? '文章暂不适合加工' : isHalted ? assessment.reason || '缺少必要阶段' : '';
+            warning = isHalted ? '' : assessment.warning || '';
             setCurrentSession(function (prev) {
               return _objectSpread(_objectSpread({}, prev), {}, {
                 rawText: _fullResponseText,
                 stages: finalParsed.stages,
                 isHalted: isHalted,
-                stopReason: stopReason
+                stopReason: stopReason,
+                warning: warning
               });
             });
             newHistoryItem = {
@@ -1492,6 +1795,7 @@ function App() {
                 stages: finalParsed.stages,
                 isHalted: isHalted,
                 stopReason: stopReason,
+                warning: warning,
                 retryCount: retryCount,
                 finishReason: assessment.finishReason || ''
               },
@@ -1502,29 +1806,29 @@ function App() {
             localStorage.setItem('agent_history', JSON.stringify(updatedHistory));
             setActiveHistoryId(newSessionId);
             setToast({
-              message: assessment.isRejected ? '文章暂不适合加工，流程已停止' : isHalted ? "\u81EA\u52A8\u91CD\u8BD5\u540E\u4ECD\u4E0D\u5B8C\u6574\uFF1A".concat(assessment.reason || '缺少必要阶段') : retryCount ? '自动重试成功，物料包生成完毕！' : '物料包生成完毕！',
+              message: assessment.isRejected ? '文章暂不适合加工，流程已停止' : isHalted ? "\u81EA\u52A8\u91CD\u8BD5\u540E\u4ECD\u4E0D\u5B8C\u6574\uFF1A".concat(assessment.reason || '缺少必要阶段') : warning ? '物料包已生成，部分格式需检查' : retryCount ? '自动重试成功，物料包生成完毕！' : '物料包生成完毕！',
               type: isHalted ? 'error' : 'success',
               duration: isHalted ? 6000 : 3000
             });
-            _context9.n = 9;
+            _context1.n = 9;
             break;
           case 8:
-            _context9.p = 8;
-            _t8 = _context9.v;
+            _context1.p = 8;
+            _t0 = _context1.v;
             setToast({
-              message: "\u5F15\u64CE\u8FDE\u63A5\u5931\u8D25: ".concat(_t8.message),
+              message: "\u5F15\u64CE\u8FDE\u63A5\u5931\u8D25: ".concat(_t0.message),
               type: 'error',
               duration: 5000
             });
           case 9:
-            _context9.p = 9;
+            _context1.p = 9;
             setIsProcessing(false);
             setShowResults(true);
-            return _context9.f(9);
+            return _context1.f(9);
           case 10:
-            return _context9.a(2);
+            return _context1.a(2);
         }
-      }, _callee8, null, [[4, 8, 9, 10]]);
+      }, _callee0, null, [[4, 8, 9, 10]]);
     }));
     function handleStartProcessing() {
       return _handleStartProcessing.apply(this, arguments);
@@ -1566,43 +1870,43 @@ function App() {
     return copied;
   };
   var copyToClipboard = function () {
-    var _copyToClipboard = _asyncToGenerator(_regenerator().m(function _callee9(text, label) {
-      var _navigator$clipboard, _t9, _t0;
-      return _regenerator().w(function (_context0) {
-        while (1) switch (_context0.p = _context0.n) {
+    var _copyToClipboard = _asyncToGenerator(_regenerator().m(function _callee1(text, label) {
+      var _navigator$clipboard, _t1, _t10;
+      return _regenerator().w(function (_context10) {
+        while (1) switch (_context10.p = _context10.n) {
           case 0:
             if (text) {
-              _context0.n = 1;
+              _context10.n = 1;
               break;
             }
             setToast({
               message: "".concat(label, " \u6682\u65E0\u53EF\u590D\u5236\u5185\u5BB9"),
               type: 'error'
             });
-            return _context0.a(2);
+            return _context10.a(2);
           case 1:
-            _context0.p = 1;
+            _context10.p = 1;
             if ((_navigator$clipboard = navigator.clipboard) !== null && _navigator$clipboard !== void 0 && _navigator$clipboard.writeText) {
-              _context0.n = 2;
+              _context10.n = 2;
               break;
             }
             throw new Error('Clipboard API unavailable');
           case 2:
-            _context0.n = 3;
+            _context10.n = 3;
             return navigator.clipboard.writeText(text);
           case 3:
             setToast({
               message: "".concat(label, " \u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F"),
               type: 'success'
             });
-            _context0.n = 8;
+            _context10.n = 8;
             break;
           case 4:
-            _context0.p = 4;
-            _t9 = _context0.v;
-            _context0.p = 5;
+            _context10.p = 4;
+            _t1 = _context10.v;
+            _context10.p = 5;
             if (fallbackCopyText(text)) {
-              _context0.n = 6;
+              _context10.n = 6;
               break;
             }
             throw new Error('Fallback copy failed');
@@ -1611,21 +1915,21 @@ function App() {
               message: "".concat(label, " \u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F"),
               type: 'success'
             });
-            _context0.n = 8;
+            _context10.n = 8;
             break;
           case 7:
-            _context0.p = 7;
-            _t0 = _context0.v;
+            _context10.p = 7;
+            _t10 = _context10.v;
             setToast({
               message: "".concat(label, " \u590D\u5236\u5931\u8D25\uFF0C\u8BF7\u624B\u52A8\u590D\u5236"),
               type: 'error'
             });
           case 8:
-            return _context0.a(2);
+            return _context10.a(2);
         }
-      }, _callee9, null, [[5, 7], [1, 4]]);
+      }, _callee1, null, [[5, 7], [1, 4]]);
     }));
-    function copyToClipboard(_x1, _x10) {
+    function copyToClipboard(_x10, _x11) {
       return _copyToClipboard.apply(this, arguments);
     }
     return copyToClipboard;
@@ -1636,26 +1940,11 @@ function App() {
     if (firstCodeBlockMatch && firstCodeBlockMatch[1].includes('[')) {
       return firstCodeBlockMatch[1].trim();
     }
-    var sections = [];
-    var regex = /###\s*\[?((?:封面|正文\d+\/\d+|封底))\]?\s*([\s\S]*?)(?=###|$)/g;
-    var match;
-    while ((match = regex.exec(content)) !== null) {
-      sections.push({
-        title: match[1],
-        text: match[2].replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim()
+    var sections = parsePromptSections(content).map(function (section) {
+      return _objectSpread(_objectSpread({}, section), {}, {
+        text: section.text.replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim()
       });
-    }
-    if (sections.length === 0) {
-      var fallbackRegex = /\[(.*?)\]\s*([\s\S]*?)(?=\[|$)/g;
-      while ((match = fallbackRegex.exec(content)) !== null) {
-        if (!match[1].includes('阶段') && !match[1].includes('总览')) {
-          sections.push({
-            title: match[1],
-            text: match[2].replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim()
-          });
-        }
-      }
-    }
+    });
     if (sections.length > 0) {
       return sections.map(function (s) {
         return "[".concat(s.title, "]\n").concat(s.text);
@@ -1734,26 +2023,7 @@ function App() {
           text: content
         }));
       }() : sId === 5 ? function () {
-        var promptSections = [];
-        var regex = /###\s*\[?((?:封面|正文\d+\/\d+|封底))\]?\s*([\s\S]*?)(?=###|$)/g;
-        var match;
-        while ((match = regex.exec(content)) !== null) {
-          promptSections.push({
-            title: match[1],
-            text: match[2].trim()
-          });
-        }
-        if (promptSections.length === 0) {
-          var fallbackRegex = /\[(.*?)\]\s*([\s\S]*?)(?=\[|$)/g;
-          while ((match = fallbackRegex.exec(content)) !== null) {
-            if (!match[1].includes('阶段')) {
-              promptSections.push({
-                title: match[1],
-                text: match[2].trim()
-              });
-            }
-          }
-        }
+        var promptSections = parsePromptSections(content);
         var htmlCards = parseCardPackage(currentSession.stages[4]);
         if (promptSections.length > 0) {
           return React.createElement("div", {
@@ -2255,7 +2525,16 @@ function App() {
     className: "text-[12px] font-bold"
   }, "\u6D41\u7A0B\u672A\u5B8C\u6574\u5B8C\u6210"), React.createElement("div", {
     className: "mt-1 text-[11px] leading-relaxed"
-  }, currentSession.stopReason || '缺少必要阶段，请检查模型输出限制后重试。'))), renderStageContent()), React.createElement("div", {
+  }, currentSession.stopReason || '缺少必要阶段，请检查模型输出限制后重试。'))), !currentSession.isHalted && currentSession.warning && React.createElement("div", {
+    className: "mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800"
+  }, React.createElement(Icon, {
+    name: "CircleAlert",
+    className: "mt-0.5 h-4 w-4 shrink-0"
+  }), React.createElement("div", null, React.createElement("div", {
+    className: "text-[12px] font-bold"
+  }, "\u683C\u5F0F\u68C0\u67E5\u63D0\u9192"), React.createElement("div", {
+    className: "mt-1 text-[11px] leading-relaxed"
+  }, currentSession.warning))), renderStageContent()), React.createElement("div", {
     ref: messagesEndRef
   })))), isConfigOpen && React.createElement("div", {
     className: "fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in"
@@ -2280,7 +2559,38 @@ function App() {
     className: "w-5 h-5"
   }))), React.createElement("div", {
     className: "config-dialog-body custom-scrollbar"
+  }, React.createElement("section", {
+    className: "config-section"
   }, React.createElement("div", {
+    className: "config-section-header"
+  }, React.createElement("div", null, React.createElement("h4", {
+    className: "config-section-title"
+  }, React.createElement(Icon, {
+    name: "MessageSquareText",
+    className: "h-4 w-4 text-indigo-600"
+  }), " \u6587\u672C\u6A21\u578B"), React.createElement("p", {
+    className: "config-section-description"
+  }, "\u7528\u4E8E\u6587\u7AE0\u5206\u6790\u3001\u5185\u5BB9\u91CD\u6784\u548C\u63D0\u793A\u8BCD\u751F\u6210\u3002\u7CFB\u7EDF\u4F1A\u6839\u636E Endpoint \u81EA\u52A8\u8BC6\u522B Responses API \u6216 Chat Completions\u3002")), React.createElement("div", {
+    className: "config-section-actions"
+  }, React.createElement("button", {
+    type: "button",
+    onClick: function onClick() {
+      return handleLoadModels('text');
+    },
+    disabled: configTools.textModels.status === 'loading',
+    className: "config-action-button"
+  }, React.createElement(Icon, {
+    name: configTools.textModels.status === 'loading' ? 'LoaderCircle' : 'ListFilter',
+    className: "h-3.5 w-3.5 ".concat(configTools.textModels.status === 'loading' ? 'animate-spin' : '')
+  }), configTools.textModels.status === 'loading' ? '读取中' : '读取模型'), React.createElement("button", {
+    type: "button",
+    onClick: handleTestTextConnection,
+    disabled: configTools.textTest.status === 'loading',
+    className: "config-action-button"
+  }, React.createElement(Icon, {
+    name: configTools.textTest.status === 'loading' ? 'LoaderCircle' : 'PlugZap',
+    className: "h-3.5 w-3.5 ".concat(configTools.textTest.status === 'loading' ? 'animate-spin' : '')
+  }), configTools.textTest.status === 'loading' ? '测试中' : '测试接口'))), React.createElement("div", {
     className: "config-grid"
   }, React.createElement("div", {
     className: "config-field config-span-2"
@@ -2295,7 +2605,9 @@ function App() {
       }));
     },
     className: "config-input placeholder-slate-400"
-  })), React.createElement("div", {
+  }), React.createElement("div", {
+    className: "config-hint"
+  }, "\u5F53\u524D\u534F\u8BAE\uFF1A", isResponsesApiEndpoint(apiConfig.apiUrl) ? 'Responses API' : 'Chat Completions')), React.createElement("div", {
     className: "config-field"
   }, React.createElement("label", {
     className: "config-label"
@@ -2307,8 +2619,16 @@ function App() {
         model: e.target.value
       }));
     },
+    list: "text-model-options",
     className: "config-input placeholder-slate-400"
-  })), React.createElement("div", {
+  }), React.createElement("datalist", {
+    id: "text-model-options"
+  }, textModels.map(function (model) {
+    return React.createElement("option", {
+      key: model,
+      value: model
+    });
+  }))), React.createElement("div", {
     className: "config-field"
   }, React.createElement("label", {
     className: "config-label"
@@ -2322,15 +2642,81 @@ function App() {
     },
     placeholder: "sk-...",
     className: "config-input placeholder-slate-400"
-  }))), React.createElement("hr", {
-    className: "config-divider"
-  }), React.createElement("div", null, React.createElement("div", {
-    className: "flex items-center justify-between mb-3"
+  }))), React.createElement(ConfigStatus, {
+    state: configTools.textModels
+  }), React.createElement(ConfigStatus, {
+    state: configTools.textTest
+  })), React.createElement("section", {
+    className: "config-section"
+  }, React.createElement("div", {
+    className: "config-section-header"
   }, React.createElement("div", null, React.createElement("h4", {
-    className: "text-[13px] font-bold text-slate-700"
-  }, "\u56FE\u7247\u751F\u6210\u914D\u7F6E"), React.createElement("p", {
-    className: "text-[11px] text-slate-400 mt-1"
-  }, "\u9002\u7528\u4E8E\u517C\u5BB9 OpenAI Images API \u7684\u63A5\u53E3\uFF0C\u652F\u6301 URL \u6216 base64 \u8FD4\u56DE\u3002"))), React.createElement("div", {
+    className: "config-section-title"
+  }, React.createElement(Icon, {
+    name: "Braces",
+    className: "h-4 w-4 text-indigo-600"
+  }), " \u5185\u5BB9\u52A0\u5DE5\u89C4\u5219"), React.createElement("p", {
+    className: "config-section-description"
+  }, "\u5B9A\u4E49\u5224\u578B\u3001\u91CD\u6784\u3001\u5361\u7247\u683C\u5F0F\u548C\u89C6\u89C9\u63D0\u793A\u8BCD\u89C4\u5219\u3002\u65E7\u914D\u7F6E\u4E0D\u4F1A\u968F\u7248\u672C\u81EA\u52A8\u8986\u76D6\u3002")), React.createElement("div", {
+    className: "config-section-actions"
+  }, React.createElement("span", {
+    className: "relative inline-flex items-center group"
+  }, React.createElement("button", {
+    type: "button",
+    "aria-label": "\u67E5\u770B\u63D0\u793A\u8BCD\u4F18\u5316\u5EFA\u8BAE",
+    title: "\u53EF\u4EE5\u5FAE\u8C03\u5185\u5BB9\u98CE\u683C\u3001\u5361\u7247\u6570\u91CF\u548C\u89C6\u89C9\u504F\u597D\uFF1B\u4E0D\u8981\u4FEE\u6539\u9636\u6BB51\u81F3\u9636\u6BB56\u3001\u5361\u7247\u6807\u9898\u548C\u5C01\u9762/\u6B63\u6587/\u5C01\u5E95\u6807\u7B7E\u3002\u6539\u574F\u540E\u53EF\u6062\u590D\u9ED8\u8BA4\u6307\u4EE4\u3002",
+    className: "w-4 h-4 rounded-full text-[10px] font-bold text-slate-400 border border-slate-300 hover:text-indigo-600 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+  }, "i")), React.createElement("button", {
+    type: "button",
+    onClick: handleRestoreDefaultPrompt,
+    className: "config-action-button"
+  }, React.createElement(Icon, {
+    name: "RotateCcw",
+    className: "h-3.5 w-3.5"
+  }), "\u6062\u590D\u9ED8\u8BA4\u6307\u4EE4"), React.createElement("button", {
+    type: "button",
+    onClick: handleClearPrompt,
+    className: "config-action-button"
+  }, React.createElement(Icon, {
+    name: "Eraser",
+    className: "h-3.5 w-3.5"
+  }), "\u6E05\u7A7A\u6307\u4EE4"))), React.createElement("textarea", {
+    ref: systemPromptRef,
+    value: apiConfig.systemPrompt,
+    onChange: function onChange(e) {
+      return setApiConfig(_objectSpread(_objectSpread({}, apiConfig), {}, {
+        systemPrompt: e.target.value
+      }));
+    },
+    className: "config-textarea custom-scrollbar",
+    placeholder: "\u8BF7\u5728\u8FD9\u91CC\u586B\u5199\u4F60\u7684\u7CFB\u7EDF\u6307\u4EE4\uFF0C\u7528\u6765\u5B9A\u4E49 Agent \u7684\u5DE5\u4F5C\u6D41\u3001\u8F93\u51FA\u683C\u5F0F\u548C\u63D0\u793A\u8BCD\u751F\u6210\u89C4\u5219\u3002\n\n\u4F8B\u5982\uFF1A\u4F60\u662F\u4E00\u4E2A\u5185\u5BB9\u52A0\u5DE5 Agent\uFF0C\u9700\u8981\u5148\u5224\u65AD\u6587\u7AE0\u662F\u5426\u9002\u5408\u62C6\u6210\u77E5\u8BC6\u5361\u7247\uFF0C\u518D\u8F93\u51FA\u7ED3\u6784\u5316\u5361\u7247\u5185\u5BB9\uFF0C\u6700\u540E\u751F\u6210\u4E2D\u6587\u751F\u56FE\u63D0\u793A\u8BCD\u3002",
+    spellCheck: "false"
+  }), React.createElement("p", {
+    className: "config-hint"
+  }, "API Key \u4E0E\u7CFB\u7EDF\u6307\u4EE4\u4EC5\u4FDD\u5B58\u5728\u5F53\u524D\u6D4F\u89C8\u5668 localStorage\uFF0C\u4E0D\u4F1A\u4E0A\u4F20\u5230\u4F5C\u8005\u670D\u52A1\u5668\u3002")), React.createElement("section", {
+    className: "config-section"
+  }, React.createElement("div", {
+    className: "config-section-header"
+  }, React.createElement("div", null, React.createElement("h4", {
+    className: "config-section-title"
+  }, React.createElement(Icon, {
+    name: "Image",
+    className: "h-4 w-4 text-indigo-600"
+  }), " \u56FE\u7247\u6A21\u578B"), React.createElement("p", {
+    className: "config-section-description"
+  }, "\u7528\u4E8E\u65E0\u5B57\u4E3B\u89C6\u89C9\u548C AI \u6574\u56FE\u3002\u8BFB\u53D6\u6A21\u578B\u5931\u8D25\u65F6\u4ECD\u53EF\u624B\u52A8\u586B\u5199\uFF0C\u6B63\u5F0F\u751F\u56FE\u5C31\u662F\u6700\u7EC8\u63A5\u53E3\u9A8C\u8BC1\u3002")), React.createElement("div", {
+    className: "config-section-actions"
+  }, React.createElement("button", {
+    type: "button",
+    onClick: function onClick() {
+      return handleLoadModels('image');
+    },
+    disabled: configTools.imageModels.status === 'loading',
+    className: "config-action-button"
+  }, React.createElement(Icon, {
+    name: configTools.imageModels.status === 'loading' ? 'LoaderCircle' : 'ListFilter',
+    className: "h-3.5 w-3.5 ".concat(configTools.imageModels.status === 'loading' ? 'animate-spin' : '')
+  }), configTools.imageModels.status === 'loading' ? '读取中' : '读取模型'))), React.createElement("div", {
     className: "config-grid"
   }, React.createElement("div", {
     className: "config-field config-span-2"
@@ -2358,9 +2744,17 @@ function App() {
         imageModel: e.target.value
       }));
     },
+    list: "image-model-options",
     placeholder: "gpt-image-1",
     className: "config-input"
-  })), React.createElement("div", {
+  }), React.createElement("datalist", {
+    id: "image-model-options"
+  }, imageModels.map(function (model) {
+    return React.createElement("option", {
+      key: model,
+      value: model
+    });
+  }))), React.createElement("div", {
     className: "config-field"
   }, React.createElement("label", {
     className: "config-label"
@@ -2388,47 +2782,9 @@ function App() {
     },
     placeholder: "sk-...",
     className: "config-input"
-  })))), React.createElement("hr", {
-    className: "config-divider"
-  }), React.createElement("div", null, React.createElement("div", {
-    className: "flex items-center justify-between mb-2"
-  }, React.createElement("div", {
-    className: "flex items-center gap-2"
-  }, React.createElement("label", {
-    className: "block text-[13px] font-bold text-slate-700"
-  }, "\u7CFB\u7EDF\u6307\u4EE4 (System Prompt)"), React.createElement("span", {
-    className: "relative inline-flex items-center group"
-  }, React.createElement("button", {
-    type: "button",
-    "aria-label": "\u67E5\u770B\u63D0\u793A\u8BCD\u4F18\u5316\u5EFA\u8BAE",
-    title: "\u53EF\u4EE5\u5FAE\u8C03\u5185\u5BB9\u98CE\u683C\u3001\u5361\u7247\u6570\u91CF\u548C\u89C6\u89C9\u504F\u597D\uFF1B\u4E0D\u8981\u4FEE\u6539\u9636\u6BB51\u81F3\u9636\u6BB56\u3001\u5361\u7247\u6807\u9898\u548C\u5C01\u9762/\u6B63\u6587/\u5C01\u5E95\u6807\u7B7E\u3002\u6539\u574F\u540E\u53EF\u6062\u590D\u9ED8\u8BA4\u6307\u4EE4\u3002",
-    className: "w-4 h-4 rounded-full text-[10px] font-bold text-slate-400 border border-slate-300 hover:text-indigo-600 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-  }, "i"))), React.createElement("div", {
-    className: "flex items-center gap-2"
-  }, React.createElement("button", {
-    type: "button",
-    onClick: handleRestoreDefaultPrompt,
-    className: "text-[12px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
-  }, "\u6062\u590D\u9ED8\u8BA4\u6307\u4EE4"), React.createElement("span", {
-    className: "text-slate-300"
-  }, "|"), React.createElement("button", {
-    type: "button",
-    onClick: handleClearPrompt,
-    className: "text-[12px] font-semibold text-slate-500 hover:text-slate-700 transition-colors"
-  }, "\u6E05\u7A7A\u6307\u4EE4"))), React.createElement("textarea", {
-    ref: systemPromptRef,
-    value: apiConfig.systemPrompt,
-    onChange: function onChange(e) {
-      return setApiConfig(_objectSpread(_objectSpread({}, apiConfig), {}, {
-        systemPrompt: e.target.value
-      }));
-    },
-    className: "config-textarea custom-scrollbar",
-    placeholder: "\u8BF7\u5728\u8FD9\u91CC\u586B\u5199\u4F60\u7684\u7CFB\u7EDF\u6307\u4EE4\uFF0C\u7528\u6765\u5B9A\u4E49 Agent \u7684\u5DE5\u4F5C\u6D41\u3001\u8F93\u51FA\u683C\u5F0F\u548C\u63D0\u793A\u8BCD\u751F\u6210\u89C4\u5219\u3002\n\n\u4F8B\u5982\uFF1A\u4F60\u662F\u4E00\u4E2A\u5185\u5BB9\u52A0\u5DE5 Agent\uFF0C\u9700\u8981\u5148\u5224\u65AD\u6587\u7AE0\u662F\u5426\u9002\u5408\u62C6\u6210\u77E5\u8BC6\u5361\u7247\uFF0C\u518D\u8F93\u51FA\u7ED3\u6784\u5316\u5361\u7247\u5185\u5BB9\uFF0C\u6700\u540E\u751F\u6210\u4E2D\u6587\u751F\u56FE\u63D0\u793A\u8BCD\u3002",
-    spellCheck: "false"
-  }), React.createElement("p", {
-    className: "text-[12px] text-slate-400 mt-2"
-  }, "\u5728\u6B64\u5904\u6DF1\u5EA6\u5B9A\u5236 Agent \u7684\u601D\u8003\u903B\u8F91\u3001\u5224\u578B\u89C4\u5219\u4E0E\u751F\u56FE\u63D0\u793A\u8BCD\u98CE\u683C\u3002API Key \u4E0E\u7CFB\u7EDF\u6307\u4EE4\u4EC5\u4FDD\u5B58\u5728\u5F53\u524D\u6D4F\u89C8\u5668\u672C\u5730 localStorage\uFF0C\u4E0D\u4F1A\u4E0A\u4F20\u5230\u4F5C\u8005\u670D\u52A1\u5668\u3002"))), React.createElement("div", {
+  }))), React.createElement(ConfigStatus, {
+    state: configTools.imageModels
+  }))), React.createElement("div", {
     className: "config-dialog-footer"
   }, React.createElement("button", {
     onClick: handleSaveConfig,

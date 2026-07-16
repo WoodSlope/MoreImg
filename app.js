@@ -621,9 +621,18 @@ var buildVisualOnlyPrompt = function buildVisualOnlyPrompt(visualPrompt, card) {
 };
 var buildFullImagePrompt = function buildFullImagePrompt(visualPrompt, card) {
   var visibleText = getCardVisibleText(card);
-  return "".concat(visualPrompt, "\n\n\u751F\u6210\u4E00\u5F20\u5B8C\u6574\u7684\u5C0F\u7EA2\u4E66\u77E5\u8BC6\u5361\u7247\u6210\u54C1\u56FE\uFF0C\u76F4\u63A5\u5B8C\u62103:4\u6392\u7248\u5E76\u51C6\u786E\u7ED8\u5236\u4EE5\u4E0B\u6587\u5B57\uFF1A").concat(visibleText.map(function (text) {
+  var sanitizedVisualPrompt = String(visualPrompt || '').replace(/无文字主视觉|无文字视觉素材/g, '完整卡片视觉').replace(/画面中不生成任何文字[^。；\n]*[。；]?/g, '').replace(/不得出现任何文字[^。；\n]*[。；]?/g, '').replace(/不要绘制标题[^。；\n]*[。；]?/g, '').replace(/避免：([^。；\n]*)/g, function (_, items) {
+    var keptItems = items.split(/[、，,]/).map(function (item) {
+      return item.trim();
+    }).filter(function (item) {
+      return item && !/(文字|字母|数字|符号|Logo|水印|标签|代码字符|伪文字)/i.test(item);
+    });
+    return keptItems.length > 0 ? "\u907F\u514D\uFF1A".concat(keptItems.join('、')) : '';
+  }).replace(/[。；]{2,}/g, '。').trim();
+  var layoutInstruction = (card === null || card === void 0 ? void 0 : card.type) === 'back' ? '这是封底：页标放在顶部，核心总结作为底部主标题，行动号召紧随其下；画面必须同时出现核心总结和行动号召。' : (card === null || card === void 0 ? void 0 : card.type) === 'cover' ? '这是封面：主标题最醒目，副标题紧随其后，文字位于顶部低细节区域。' : '这是正文页：标题置于顶部，要点按清晰顺序排列，总结置于底部。';
+  return "\u751F\u6210\u4E00\u5F20\u5B8C\u6574\u7684\u5C0F\u7EA2\u4E66\u77E5\u8BC6\u5361\u7247\u6210\u54C1\u56FE\uFF0C\u76F4\u63A5\u5B8C\u62103:4\u6392\u7248\u3002\u672C\u9875\u5FC5\u987B\u5305\u542B\u4E14\u53EA\u80FD\u5305\u542B\u4EE5\u4E0B\u6587\u5B57\uFF1A".concat(visibleText.map(function (text) {
     return "\u300C".concat(text, "\u300D");
-  }).join('、'), "\u3002\u6587\u5B57\u5FC5\u987B\u6E05\u6670\u53EF\u8BFB\u3001\u9010\u5B57\u4FDD\u6301\u4E0D\u53D8\uFF1B\u4E0D\u8981\u6DFB\u52A0\u4EFB\u4F55\u672A\u63D0\u4F9B\u7684\u6587\u5B57\u3002AI \u6574\u56FE\u4E3A\u5B9E\u9A8C\u6027\u8F93\u51FA\uFF0C\u4F18\u5148\u4FDD\u8BC1\u6587\u5B57\u4E0E\u5361\u7247\u7ED3\u6784\u5BF9\u5E94\u3002");
+  }).join('、'), "\u3002").concat(layoutInstruction, "\u6240\u6709\u6587\u5B57\u5FC5\u987B\u6E05\u6670\u53EF\u8BFB\u3001\u9010\u5B57\u4FDD\u6301\u4E0D\u53D8\uFF0C\u4E0D\u80FD\u7701\u7565\uFF1B\u7981\u6B62\u751F\u6210\u65E0\u6587\u5B57\u7248\u672C\uFF0C\u4E0D\u8981\u6DFB\u52A0\u4EFB\u4F55\u672A\u63D0\u4F9B\u7684\u6587\u5B57\u3002\n\n\u89C6\u89C9\u80CC\u666F\u53C2\u8003\uFF1A").concat(sanitizedVisualPrompt, "\u3002AI \u6574\u56FE\u4E3A\u5B9E\u9A8C\u6027\u8F93\u51FA\uFF0C\u4F18\u5148\u4FDD\u8BC1\u6587\u5B57\u4E0E\u5361\u7247\u7ED3\u6784\u5BF9\u5E94\u3002");
 };
 var cleanCardValue = function cleanCardValue() {
   var value = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : '';
@@ -688,7 +697,7 @@ var parseCardPackage = function parseCardPackage(content) {
     return card.title || card.subtitle || card.points.length || card.summary;
   });
 };
-var HTML_CARD_EXPORT_STYLES = "\n      .moreimg-export-card{box-sizing:border-box;position:relative;isolation:isolate;width:1080px;height:1440px;overflow:hidden;background:#121417;color:#f7f7f2;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"PingFang SC\",\"Microsoft YaHei\",sans-serif;padding:88px;letter-spacing:0}\n      .moreimg-export-card *{box-sizing:border-box}\n      .moreimg-card-media{position:absolute;inset:0;z-index:-4;background:#15171a;overflow:hidden}\n      .moreimg-card-media img{width:100%;height:100%;object-fit:cover;object-position:center 58%;display:block;transform:scale(1.012)}\n      .moreimg-card-visual-placeholder{position:absolute;inset:0;background:radial-gradient(circle at 62% 66%,rgba(239,232,216,.25),transparent 24%),linear-gradient(155deg,#313842 0%,#15181d 56%,#08090b 100%)}\n      .moreimg-card-shade{position:absolute;inset:0;z-index:-3;pointer-events:none;background:linear-gradient(180deg,rgba(7,9,12,.94) 0%,rgba(7,9,12,.76) 25%,rgba(7,9,12,.18) 58%,rgba(7,9,12,.54) 100%)}\n      .moreimg-card-body .moreimg-card-shade{background:linear-gradient(180deg,rgba(7,9,12,.92) 0%,rgba(7,9,12,.54) 40%,rgba(7,9,12,.38) 58%,rgba(7,9,12,.9) 100%)}\n      .moreimg-card-back .moreimg-card-shade{background:linear-gradient(180deg,rgba(7,9,12,.62) 0%,rgba(7,9,12,.16) 48%,rgba(7,9,12,.92) 100%)}\n      .moreimg-card-noise{position:absolute;inset:0;z-index:-2;opacity:.16;background-image:radial-gradient(rgba(255,255,255,.42) .7px,transparent .8px);background-size:7px 7px;mix-blend-mode:soft-light;pointer-events:none}\n      .moreimg-card-content{position:relative;z-index:2;width:100%;height:100%;display:flex;flex-direction:column}\n      .moreimg-card-header{max-width:890px}\n      .moreimg-card-kicker{display:flex;align-items:center;gap:20px;color:rgba(255,255,255,.72);font-size:27px;line-height:1;font-weight:760;letter-spacing:.08em}\n      .moreimg-card-kicker:before{content:\"\";width:64px;height:4px;background:rgba(255,255,255,.78);flex:none}\n      .moreimg-card-title{margin:54px 0 0;font-size:78px;line-height:1.08;font-weight:900;letter-spacing:-.045em;color:#f8f7f2;max-width:920px;overflow-wrap:anywhere;text-wrap:balance;text-shadow:0 4px 34px rgba(0,0,0,.42)}\n      .moreimg-card-subtitle{margin-top:30px;max-width:800px;font-size:33px;line-height:1.45;font-weight:620;color:rgba(255,255,255,.76);text-shadow:0 3px 22px rgba(0,0,0,.48)}\n      .moreimg-card-points{margin-top:auto;padding:12px 34px;border:1px solid rgba(255,255,255,.18);border-radius:30px;background:rgba(8,10,13,.76);box-shadow:0 28px 70px rgba(0,0,0,.22)}\n      .moreimg-card-point{min-height:86px;padding:24px 0;display:flex;align-items:center;border-bottom:1px solid rgba(255,255,255,.14);font-size:30px;line-height:1.38;font-weight:700;color:#f4f3ee}\n      .moreimg-card-point:last-child{border-bottom:0}\n      .moreimg-card-point-index{width:58px;margin-right:22px;flex:none;color:rgba(255,255,255,.46);font-size:21px;font-variant-numeric:tabular-nums;letter-spacing:.08em}\n      .moreimg-card-summary{margin-top:28px;padding:26px 0 0;border-top:2px solid rgba(255,255,255,.34);font-size:31px;line-height:1.4;font-weight:800;color:#f8f7f2;text-shadow:0 3px 20px rgba(0,0,0,.42)}\n      .moreimg-card-body .moreimg-card-title{margin-top:46px;font-size:67px;line-height:1.1;max-width:840px}\n      .moreimg-card-body .moreimg-card-header{max-width:850px}\n      .moreimg-card-back .moreimg-card-content{justify-content:flex-end}\n      .moreimg-card-back .moreimg-card-header{max-width:900px}\n      .moreimg-card-back .moreimg-card-title{margin-top:48px;font-size:72px;line-height:1.12}\n      .moreimg-card-back .moreimg-card-summary{margin-top:42px;padding:30px 0 0;font-size:36px;max-width:850px;color:rgba(255,255,255,.78)}\n    ";
+var HTML_CARD_EXPORT_STYLES = "\n      .moreimg-export-card{box-sizing:border-box;position:relative;isolation:isolate;width:1080px;height:1440px;overflow:hidden;background:#121417;color:#f7f7f2;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"PingFang SC\",\"Microsoft YaHei\",sans-serif;padding:88px;letter-spacing:0}\n      .moreimg-export-card *{box-sizing:border-box}\n      .moreimg-card-media{position:absolute;inset:0;z-index:-4;background:#15171a;overflow:hidden}\n      .moreimg-card-media img{width:100%;height:100%;object-fit:cover;object-position:center 58%;display:block;transform:scale(1.012)}\n      .moreimg-card-body .moreimg-card-media img{object-position:center 54%}\n      .moreimg-card-back .moreimg-card-media img{object-position:center 48%}\n      .moreimg-card-visual-placeholder{position:absolute;inset:0;background:radial-gradient(circle at 62% 66%,rgba(239,232,216,.25),transparent 24%),linear-gradient(155deg,#313842 0%,#15181d 56%,#08090b 100%)}\n      .moreimg-card-shade{position:absolute;inset:0;z-index:-3;pointer-events:none;background:linear-gradient(180deg,rgba(7,9,12,.9) 0%,rgba(7,9,12,.66) 24%,rgba(7,9,12,.08) 58%,rgba(7,9,12,.44) 100%)}\n      .moreimg-card-body .moreimg-card-shade{background:radial-gradient(ellipse at 18% 12%,rgba(5,8,12,.72) 0%,rgba(5,8,12,.36) 33%,transparent 58%),linear-gradient(180deg,rgba(5,8,12,.5) 0%,rgba(5,8,12,.08) 43%,rgba(5,8,12,.24) 61%,rgba(5,8,12,.94) 100%)}\n      .moreimg-card-back .moreimg-card-shade{background:linear-gradient(180deg,rgba(7,9,12,.5) 0%,rgba(7,9,12,.08) 34%,rgba(7,9,12,.14) 56%,rgba(7,9,12,.9) 100%)}\n      .moreimg-card-noise{position:absolute;inset:0;z-index:-2;opacity:.1;background-image:radial-gradient(rgba(255,255,255,.38) .7px,transparent .8px);background-size:7px 7px;mix-blend-mode:soft-light;pointer-events:none}\n      .moreimg-card-content{position:relative;z-index:2;width:100%;height:100%;display:flex;flex-direction:column}\n      .moreimg-card-header{max-width:890px}\n      .moreimg-card-kicker{display:flex;align-items:center;gap:20px;color:rgba(255,255,255,.72);font-size:27px;line-height:1;font-weight:760;letter-spacing:.08em}\n      .moreimg-card-kicker:before{content:\"\";width:64px;height:4px;background:rgba(255,255,255,.78);flex:none}\n      .moreimg-card-title{margin:54px 0 0;font-size:78px;line-height:1.08;font-weight:900;letter-spacing:0;color:#f8f7f2;max-width:920px;overflow-wrap:anywhere;text-wrap:balance;text-shadow:0 4px 34px rgba(0,0,0,.5)}\n      .moreimg-card-subtitle{margin-top:30px;max-width:800px;font-size:33px;line-height:1.45;font-weight:620;color:rgba(255,255,255,.76);text-shadow:0 3px 22px rgba(0,0,0,.48)}\n      .moreimg-card-points{margin-top:auto;padding:0 6px;background:transparent}\n      .moreimg-card-point{min-height:82px;padding:22px 0;display:flex;align-items:center;border-bottom:1px solid rgba(255,255,255,.2);font-size:30px;line-height:1.38;font-weight:700;color:#f4f3ee;text-shadow:0 3px 20px rgba(0,0,0,.72)}\n      .moreimg-card-point:last-child{border-bottom:0}\n      .moreimg-card-point-index{width:58px;margin-right:22px;flex:none;color:rgba(255,255,255,.5);font-size:21px;font-variant-numeric:tabular-nums;letter-spacing:.08em}\n      .moreimg-card-summary{margin-top:22px;padding:24px 6px 0;border-top:2px solid rgba(255,255,255,.36);font-size:31px;line-height:1.4;font-weight:800;color:#f8f7f2;text-shadow:0 3px 20px rgba(0,0,0,.64)}\n      .moreimg-card-body .moreimg-card-title{margin-top:46px;font-size:67px;line-height:1.1;max-width:840px}\n      .moreimg-card-body .moreimg-card-header{max-width:850px}\n      .moreimg-card-back .moreimg-card-content{justify-content:space-between}\n      .moreimg-card-back-copy{max-width:900px;padding-bottom:8px}\n      .moreimg-card-back .moreimg-card-title{margin:0;font-size:68px;line-height:1.16}\n      .moreimg-card-back .moreimg-card-summary{margin-top:34px;padding:26px 0 0;font-size:34px;max-width:820px;color:rgba(255,255,255,.78)}\n    ";
 var HtmlCard = function HtmlCard(_ref3) {
   var card = _ref3.card,
     imageUrl = _ref3.imageUrl,
@@ -709,7 +718,15 @@ var HtmlCard = function HtmlCard(_ref3) {
     className: "moreimg-card-noise"
   }), React.createElement("div", {
     className: "moreimg-card-content"
-  }, React.createElement("div", {
+  }, card.type === 'back' ? React.createElement(React.Fragment, null, React.createElement("div", {
+    className: "moreimg-card-kicker"
+  }, card.label), React.createElement("div", {
+    className: "moreimg-card-back-copy"
+  }, React.createElement("h3", {
+    className: "moreimg-card-title"
+  }, card.title || '未识别到总结'), card.summary && React.createElement("div", {
+    className: "moreimg-card-summary"
+  }, card.summary))) : React.createElement(React.Fragment, null, React.createElement("div", {
     className: "moreimg-card-header"
   }, React.createElement("div", {
     className: "moreimg-card-kicker"
@@ -728,7 +745,7 @@ var HtmlCard = function HtmlCard(_ref3) {
     }, String(index + 1).padStart(2, '0')), point);
   })), card.summary && React.createElement("div", {
     className: "moreimg-card-summary"
-  }, card.summary)));
+  }, card.summary))));
 };
 var Toast = function Toast(_ref4) {
   var message = _ref4.message,
@@ -2191,7 +2208,7 @@ function App() {
           }, "HTML \u6210\u54C1\u5361"), React.createElement("p", {
             className: "mt-1 text-[12px] leading-relaxed text-slate-500"
           }, "\u6587\u5B57\u7531\u7F51\u9875\u7CBE\u786E\u6392\u7248\uFF0CAI \u56FE\u7247\u4F5C\u4E3A\u4E3B\u89C6\u89C9\uFF1B\u5BFC\u51FA\u5C3A\u5BF8\u56FA\u5B9A\u4E3A 1080\xD71440\u3002")), React.createElement("span", {
-            className: "rounded-lg bg-indigo-50 px-3 py-1.5 text-[11px] font-bold text-indigo-600"
+            className: "visual-card-count"
           }, "\u5171 ", htmlCards.length, " \u5F20")), React.createElement("style", null, HTML_CARD_EXPORT_STYLES), React.createElement("div", {
             className: "visual-card-grid"
           }, htmlCards.map(function (card) {
@@ -2201,7 +2218,7 @@ function App() {
               key: card.id,
               className: "visual-output-card"
             }, React.createElement("div", {
-              className: "mb-4 flex items-center justify-between gap-3"
+              className: "visual-output-card-header"
             }, React.createElement("span", {
               className: "text-[13px] font-bold text-slate-800"
             }, card.label), React.createElement("button", {

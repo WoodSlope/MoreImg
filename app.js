@@ -376,6 +376,7 @@ var parseStreamedText = function parseStreamedText(fullText) {
     latestStage: currentStage || 1
   };
 };
+var PROCESSING_MAX_OUTPUT_TOKENS = 12000;
 var PROCESSING_REQUIRED_PATTERNS = {
   stage4: [/\*\*封面卡片\*\*/, /\*\*正文卡片\s*\d+\/\d+\*\*/, /\*\*封底卡片\*\*/],
   stage5: [/###\s*\[?封面\]?/, /###\s*\[?正文\d+\/\d+\]?/, /###\s*\[?封底\]?/]
@@ -400,6 +401,20 @@ var assessProcessingResult = function assessProcessingResult(fullText) {
     reason: hasFormatError ? '接口返回格式异常' : !hasStage4 ? '阶段4卡片结构不完整' : !hasStage5 ? '阶段5提示词结构不完整' : ''
   };
 };
+var applyProcessingFinishReason = function applyProcessingFinishReason(assessment) {
+  var finishReason = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : '';
+  var normalizedFinishReason = String(finishReason || '').trim().toLowerCase();
+  var isTruncated = ['length', 'max_tokens', 'max_output_tokens'].includes(normalizedFinishReason);
+  if (!isTruncated || assessment.isRejected) return _objectSpread(_objectSpread({}, assessment), {}, {
+    finishReason: normalizedFinishReason
+  });
+  return _objectSpread(_objectSpread({}, assessment), {}, {
+    isComplete: false,
+    shouldRetry: true,
+    reason: "\u8F93\u51FA\u8FBE\u5230 ".concat(PROCESSING_MAX_OUTPUT_TOKENS, " Token \u4E0A\u9650"),
+    finishReason: normalizedFinishReason
+  });
+};
 var buildProcessingMessages = function buildProcessingMessages(originalText, previousResponse) {
   var systemPrompt = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : '';
   return [{
@@ -416,8 +431,37 @@ var buildProcessingMessages = function buildProcessingMessages(originalText, pre
     content: '上一次输出不完整。请重新从阶段1开始，严格连续输出到阶段6；阶段4必须包含封面卡片、至少一张正文卡片和封底卡片，阶段5必须包含与卡片一一对应的封面、正文和封底拆分提示词。不要解释重试原因，直接输出完整结果。'
   }];
 };
+var buildProcessingRequestBody = function buildProcessingRequestBody(model, messages) {
+  var requestBody = {
+    model: model,
+    messages: messages,
+    stream: false,
+    temperature: 0.7
+  };
+  var usesCompletionTokenLimit = /^(?:gpt-5|o\d)/i.test(String(model || '').trim());
+  if (usesCompletionTokenLimit) requestBody.max_completion_tokens = PROCESSING_MAX_OUTPUT_TOKENS;else requestBody.max_tokens = PROCESSING_MAX_OUTPUT_TOKENS;
+  return requestBody;
+};
 var getCardVisibleText = function getCardVisibleText(card) {
   return card ? [card.title, card.subtitle].concat(_toConsumableArray(card.points || []), [card.summary]).filter(Boolean) : [];
+};
+var buildVisualOnlyPrompt = function buildVisualOnlyPrompt(visualPrompt, card) {
+  var visibleText = card ? [card.title, card.subtitle].concat(_toConsumableArray(card.points || []), [card.summary]).filter(Boolean) : [];
+  var sanitizedPrompt = String(visualPrompt || '').replace(/```[^\n]*\n?/g, '').replace(/```/g, '').replace(/「[^」]*」|“[^”]*”|"[^"]*"/g, '').trim();
+  visibleText.forEach(function (text) {
+    sanitizedPrompt = sanitizedPrompt.split(String(text)).join('');
+  });
+  var textLayoutInstruction = /(?:主标题|副标题|标题|要点|总结|行动号召|信息条|文字排版|文本排版|字体|字号|字重|文案|准确绘制|逐字|写上|标注|页码|署名|二维码)/;
+  var sceneDescription = sanitizedPrompt.split(/[。！？；\n]+/).map(function (sentence) {
+    return sentence.split(/[，,]+/).map(function (part) {
+      return part.trim().replace(/^[、:：\s]+|[、:：\s]+$/g, '');
+    }).filter(function (part) {
+      return part && !textLayoutInstruction.test(part);
+    }).join('，');
+  }).filter(function (part) {
+    return part && !textLayoutInstruction.test(part);
+  }).join('。');
+  return "\u65E0\u6587\u5B57\u4E3B\u89C6\u89C9\u3002\u53EA\u4FDD\u7559\u5E76\u751F\u6210\u4EE5\u4E0B\u573A\u666F\u6216\u63D2\u56FE\u5143\u7D20\uFF1A".concat(sceneDescription || '围绕卡片核心比喻设计一个主体明确、构图简洁的视觉场景', "\u3002\u4E0D\u5F97\u51FA\u73B0\u4EFB\u4F55\u6587\u5B57\u3001\u5B57\u6BCD\u3001\u6570\u5B57\u3001\u7B26\u53F7\u3001Logo\u3001\u6C34\u5370\u3001\u5361\u7247\u6846\u67B6\u3001UI\u3001\u4FE1\u606F\u6761\u6216\u4F2A\u6587\u5B57\u7EB9\u7406\uFF1B\u4E0D\u8981\u7ED8\u5236\u6807\u9898\u3001\u8981\u70B9\u3001\u603B\u7ED3\u548C\u6309\u94AE\u6807\u7B7E\u3002");
 };
 var buildFullImagePrompt = function buildFullImagePrompt(visualPrompt, card) {
   var visibleText = getCardVisibleText(card);
@@ -629,7 +673,8 @@ function App() {
         5: '',
         6: ''
       },
-      isHalted: false
+      isHalted: false,
+      stopReason: ''
     }),
     _useState26 = _slicedToArray(_useState25, 2),
     currentSession = _useState26[0],
@@ -777,6 +822,7 @@ function App() {
         imageBlob,
         sessionId,
         imageUrl,
+        generationLabel,
         _args5 = arguments,
         _t2,
         _t3;
@@ -880,8 +926,9 @@ function App() {
               });
               return nextResults;
             });
+            generationLabel = mode === 'full' ? 'AI 整图' : mode === 'visual-only' ? '无字主视觉' : '主视觉';
             setToast({
-              message: "[".concat(cardTitle, "] ").concat(mode === 'full' ? 'AI 整图' : '主视觉', "\u751F\u6210\u5B8C\u6210"),
+              message: "[".concat(cardTitle, "] ").concat(generationLabel, "\u751F\u6210\u5B8C\u6210"),
               type: 'success'
             });
             _context5.n = 12;
@@ -924,25 +971,36 @@ function App() {
   };
   var exportHtmlCard = function () {
     var _exportHtmlCard = _asyncToGenerator(_regenerator().m(function _callee6(card) {
-      var sourceNode, canvas, pngBlob, pngUrl, _t4;
+      var visualResult, sourceNode, canvas, pngBlob, pngUrl, _t4;
       return _regenerator().w(function (_context6) {
         while (1) switch (_context6.p = _context6.n) {
           case 0:
-            sourceNode = htmlCardRefs.current[card.id];
-            if (sourceNode) {
+            visualResult = imageResults["visual-only:".concat(card.imageKey)];
+            if (!((visualResult === null || visualResult === void 0 ? void 0 : visualResult.status) !== 'success')) {
               _context6.n = 1;
               break;
             }
+            setToast({
+              message: '请先生成无字主视觉',
+              type: 'error'
+            });
             return _context6.a(2);
           case 1:
-            _context6.p = 1;
-            if (window.html2canvas) {
+            sourceNode = htmlCardRefs.current[card.id];
+            if (sourceNode) {
               _context6.n = 2;
               break;
             }
-            throw new Error('本地导出组件未加载');
+            return _context6.a(2);
           case 2:
-            _context6.n = 3;
+            _context6.p = 2;
+            if (window.html2canvas) {
+              _context6.n = 3;
+              break;
+            }
+            throw new Error('本地导出组件未加载');
+          case 3:
+            _context6.n = 4;
             return window.html2canvas(sourceNode, {
               width: 1080,
               height: 1440,
@@ -952,20 +1010,20 @@ function App() {
               allowTaint: false,
               logging: false
             });
-          case 3:
+          case 4:
             canvas = _context6.v;
-            _context6.n = 4;
+            _context6.n = 5;
             return new Promise(function (resolve) {
               return canvas.toBlob(resolve, 'image/png', 1);
             });
-          case 4:
+          case 5:
             pngBlob = _context6.v;
             if (pngBlob) {
-              _context6.n = 5;
+              _context6.n = 6;
               break;
             }
             throw new Error('PNG 编码失败');
-          case 5:
+          case 6:
             pngUrl = URL.createObjectURL(pngBlob);
             downloadImage("".concat(card.label, "-HTML\u6210\u54C1"), pngUrl);
             setTimeout(function () {
@@ -975,20 +1033,20 @@ function App() {
               message: "[".concat(card.label, "] HTML \u6210\u54C1\u5DF2\u5BFC\u51FA"),
               type: 'success'
             });
-            _context6.n = 7;
+            _context6.n = 8;
             break;
-          case 6:
-            _context6.p = 6;
+          case 7:
+            _context6.p = 7;
             _t4 = _context6.v;
             setToast({
               message: "\u5BFC\u51FA\u5931\u8D25: ".concat(_t4.message),
               type: 'error',
               duration: 5000
             });
-          case 7:
+          case 8:
             return _context6.a(2);
         }
-      }, _callee6, null, [[1, 6]]);
+      }, _callee6, null, [[2, 7]]);
     }));
     function exportHtmlCard(_x9) {
       return _exportHtmlCard.apply(this, arguments);
@@ -1016,7 +1074,8 @@ function App() {
           5: '',
           6: ''
         },
-        isHalted: false
+        isHalted: false,
+        stopReason: ''
       });
       replaceImageResults({});
     }
@@ -1027,13 +1086,14 @@ function App() {
   };
   var requestProcessingText = function () {
     var _requestProcessingText = _asyncToGenerator(_regenerator().m(function _callee7(messages) {
-      var fullResponseText, rawBuffer, isStreamedData, response, errorMsg, _errorData$error, errorData, reader, decoder, streamBuffer, _yield$reader$read, done, value, dataStr, _data$choices$, data, chunk, lines, _iterator2, _step2, _loop, _ret, _data2$choices, _data2$choices2, _data2, parsed, _t6, _t7;
+      var fullResponseText, rawBuffer, isStreamedData, finishReason, response, errorMsg, _errorData$error, errorData, reader, decoder, streamBuffer, _yield$reader$read, done, value, dataStr, _data$choices, _choice$delta, data, choice, chunk, lines, _iterator2, _step2, _loop, _ret, _data2$choices, _choice2$message, _choice2$delta, _data2, _choice2, parsed, _t6, _t7;
       return _regenerator().w(function (_context8) {
         while (1) switch (_context8.p = _context8.n) {
           case 0:
             fullResponseText = '';
             rawBuffer = '';
             isStreamedData = false;
+            finishReason = '';
             _context8.n = 1;
             return fetch(apiConfig.apiUrl, {
               method: 'POST',
@@ -1041,12 +1101,7 @@ function App() {
                 'Content-Type': 'application/json',
                 'Authorization': "Bearer ".concat(apiConfig.apiKey)
               },
-              body: JSON.stringify({
-                model: apiConfig.model,
-                messages: messages,
-                stream: false,
-                temperature: 0.7
-              })
+              body: JSON.stringify(buildProcessingRequestBody(apiConfig.model, messages))
             });
           case 1:
             response = _context8.v;
@@ -1092,7 +1147,9 @@ function App() {
                 dataStr = streamBuffer.substring(5).trim();
                 if (dataStr !== '[DONE]') {
                   data = JSON.parse(dataStr);
-                  fullResponseText += ((_data$choices$ = data.choices[0]) === null || _data$choices$ === void 0 || (_data$choices$ = _data$choices$.delta) === null || _data$choices$ === void 0 ? void 0 : _data$choices$.content) || '';
+                  choice = ((_data$choices = data.choices) === null || _data$choices === void 0 ? void 0 : _data$choices[0]) || {};
+                  finishReason = choice.finish_reason || finishReason;
+                  fullResponseText += ((_choice$delta = choice.delta) === null || _choice$delta === void 0 ? void 0 : _choice$delta.content) || '';
                 }
               } catch (e) {}
             }
@@ -1108,7 +1165,7 @@ function App() {
             _iterator2 = _createForOfIteratorHelper(lines);
             _context8.p = 10;
             _loop = _regenerator().m(function _loop() {
-              var line, _data$choices$2, _dataStr, _data, delta, parsed, _t5;
+              var line, _data$choices2, _choice$delta2, _dataStr, _data, _choice, delta, parsed, _t5;
               return _regenerator().w(function (_context7) {
                 while (1) switch (_context7.p = _context7.n) {
                   case 0:
@@ -1134,7 +1191,9 @@ function App() {
                     return _context7.a(2, 0);
                   case 3:
                     _data = JSON.parse(_dataStr);
-                    delta = ((_data$choices$2 = _data.choices[0]) === null || _data$choices$2 === void 0 || (_data$choices$2 = _data$choices$2.delta) === null || _data$choices$2 === void 0 ? void 0 : _data$choices$2.content) || '';
+                    _choice = ((_data$choices2 = _data.choices) === null || _data$choices2 === void 0 ? void 0 : _data$choices2[0]) || {};
+                    finishReason = _choice.finish_reason || finishReason;
+                    delta = ((_choice$delta2 = _choice.delta) === null || _choice$delta2 === void 0 ? void 0 : _choice$delta2.content) || '';
                     if (delta) {
                       fullResponseText += delta;
                       parsed = parseStreamedText(fullResponseText);
@@ -1192,7 +1251,9 @@ function App() {
             if (!isStreamedData && rawBuffer.trim()) {
               try {
                 _data2 = JSON.parse(rawBuffer);
-                fullResponseText = ((_data2$choices = _data2.choices) === null || _data2$choices === void 0 || (_data2$choices = _data2$choices[0]) === null || _data2$choices === void 0 || (_data2$choices = _data2$choices.message) === null || _data2$choices === void 0 ? void 0 : _data2$choices.content) || ((_data2$choices2 = _data2.choices) === null || _data2$choices2 === void 0 || (_data2$choices2 = _data2$choices2[0]) === null || _data2$choices2 === void 0 || (_data2$choices2 = _data2$choices2.delta) === null || _data2$choices2 === void 0 ? void 0 : _data2$choices2.content) || '';
+                _choice2 = ((_data2$choices = _data2.choices) === null || _data2$choices === void 0 ? void 0 : _data2$choices[0]) || {};
+                finishReason = _choice2.finish_reason || '';
+                fullResponseText = ((_choice2$message = _choice2.message) === null || _choice2$message === void 0 ? void 0 : _choice2$message.content) || ((_choice2$delta = _choice2.delta) === null || _choice2$delta === void 0 ? void 0 : _choice2$delta.content) || '';
               } catch (e) {
                 fullResponseText = '## 接口返回格式异常\n\n大模型接口返回了非标准的文本结构。\n\n' + rawBuffer;
               }
@@ -1211,7 +1272,10 @@ function App() {
             }
             throw new Error('大模型未返回任何有效内容，请检查接口配置或稍后重试。');
           case 19:
-            return _context8.a(2, fullResponseText);
+            return _context8.a(2, {
+              text: fullResponseText,
+              finishReason: finishReason
+            });
         }
       }, _callee7, null, [[10, 15, 16, 17], [2, 4]]);
     }));
@@ -1226,11 +1290,13 @@ function App() {
         textToProcess,
         newSessionId,
         initialMessages,
+        processingResult,
         _fullResponseText,
         assessment,
         retryCount,
         finalParsed,
         isHalted,
+        stopReason,
         newHistoryItem,
         updatedHistory,
         _args9 = arguments,
@@ -1287,7 +1353,8 @@ function App() {
                 5: '',
                 6: ''
               },
-              isHalted: false
+              isHalted: false,
+              stopReason: ''
             });
             replaceImageResults({});
             newSessionId = Date.now().toString();
@@ -1302,8 +1369,9 @@ function App() {
             _context9.n = 5;
             return requestProcessingText(initialMessages);
           case 5:
-            _fullResponseText = _context9.v;
-            assessment = assessProcessingResult(_fullResponseText);
+            processingResult = _context9.v;
+            _fullResponseText = processingResult.text;
+            assessment = applyProcessingFinishReason(assessProcessingResult(_fullResponseText), processingResult.finishReason);
             retryCount = 0;
             if (!assessment.shouldRetry) {
               _context9.n = 7;
@@ -1326,21 +1394,25 @@ function App() {
                 5: '',
                 6: ''
               },
-              isHalted: false
+              isHalted: false,
+              stopReason: ''
             });
             _context9.n = 6;
             return requestProcessingText(buildProcessingMessages(textToProcess, _fullResponseText, apiConfig.systemPrompt));
           case 6:
-            _fullResponseText = _context9.v;
-            assessment = assessProcessingResult(_fullResponseText);
+            processingResult = _context9.v;
+            _fullResponseText = processingResult.text;
+            assessment = applyProcessingFinishReason(assessProcessingResult(_fullResponseText), processingResult.finishReason);
           case 7:
             finalParsed = assessment.parsed;
             isHalted = !assessment.isComplete;
+            stopReason = assessment.isRejected ? '文章暂不适合加工' : isHalted ? assessment.reason || '缺少必要阶段' : '';
             setCurrentSession(function (prev) {
               return _objectSpread(_objectSpread({}, prev), {}, {
                 rawText: _fullResponseText,
                 stages: finalParsed.stages,
-                isHalted: isHalted
+                isHalted: isHalted,
+                stopReason: stopReason
               });
             });
             newHistoryItem = {
@@ -1351,7 +1423,9 @@ function App() {
                 rawText: _fullResponseText,
                 stages: finalParsed.stages,
                 isHalted: isHalted,
-                retryCount: retryCount
+                stopReason: stopReason,
+                retryCount: retryCount,
+                finishReason: assessment.finishReason || ''
               },
               originalInput: textToProcess
             };
@@ -1620,11 +1694,13 @@ function App() {
             className: "visual-prompt-list"
           }, promptSections.map(function (sec, i) {
             var cleanPromptText = sec.text.replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim();
-            var imageResult = imageResults["visual:".concat(sec.title)];
+            var imageResult = imageResults["visual-only:".concat(sec.title)];
+            var legacyVisualResult = imageResults["visual:".concat(sec.title)];
             var fullImageResult = imageResults["full:".concat(sec.title)];
             var matchingCard = htmlCards.find(function (card) {
               return card.imageKey === sec.title;
             });
+            var visualOnlyPrompt = buildVisualOnlyPrompt(cleanPromptText, matchingCard);
             var fullImageVisibleText = getCardVisibleText(matchingCard);
             var fullImagePrompt = buildFullImagePrompt(cleanPromptText, matchingCard);
             return React.createElement("div", {
@@ -1641,14 +1717,14 @@ function App() {
               className: "visual-panel-actions"
             }, React.createElement("button", {
               onClick: function onClick() {
-                return handleGenerateImage(sec.title, cleanPromptText, 'visual');
+                return handleGenerateImage(sec.title, visualOnlyPrompt, 'visual-only');
               },
               disabled: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading',
               className: "visual-button visual-button-primary flex items-center justify-center"
             }, React.createElement(Icon, {
               name: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? 'LoaderCircle' : 'Sparkles',
               className: "w-4 h-4 mr-2 ".concat((imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? 'animate-spin' : '')
-            }), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? '生成中' : imageResult ? '重新生成' : '生成主视觉'), React.createElement("button", {
+            }), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? '生成中' : imageResult ? '重新生成无字主视觉' : '生成无字主视觉'), React.createElement("button", {
               onClick: function onClick() {
                 return handleGenerateImage(sec.title, fullImagePrompt, 'full');
               },
@@ -1669,7 +1745,9 @@ function App() {
               className: "w-4 h-4"
             })))), React.createElement("div", {
               className: "visual-notice"
-            }, "AI \u6574\u56FE\u5C5E\u4E8E\u5B9E\u9A8C\u6027\u8F93\u51FA\uFF0C\u53EF\u80FD\u51FA\u73B0\u9519\u5B57\u3001\u6F0F\u5B57\u6216\u6392\u7248\u504F\u5DEE\u3002\u9700\u8981\u51C6\u786E\u4E2D\u6587\u65F6\uFF0C\u8BF7\u4F7F\u7528 HTML \u6210\u54C1\u5361\u3002"), React.createElement("details", {
+            }, "AI \u6574\u56FE\u5C5E\u4E8E\u5B9E\u9A8C\u6027\u8F93\u51FA\uFF0C\u53EF\u80FD\u51FA\u73B0\u9519\u5B57\u3001\u6F0F\u5B57\u6216\u6392\u7248\u504F\u5DEE\u3002\u9700\u8981\u51C6\u786E\u4E2D\u6587\u65F6\uFF0C\u8BF7\u4F7F\u7528 HTML \u6210\u54C1\u5361\u3002"), (legacyVisualResult === null || legacyVisualResult === void 0 ? void 0 : legacyVisualResult.status) === 'success' && (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) !== 'success' && React.createElement("div", {
+              className: "mx-4 md:mx-6 mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-relaxed text-amber-700"
+            }, "\u65E7\u7248\u4E3B\u89C6\u89C9\u4E0D\u518D\u7528\u4E8E HTML \u6210\u54C1\u5361\uFF0C\u8BF7\u91CD\u65B0\u751F\u6210\u65E0\u5B57\u4E3B\u89C6\u89C9\u3002"), React.createElement("details", {
               className: "visual-disclosure"
             }, React.createElement("summary", {
               className: "cursor-pointer select-none"
@@ -1779,7 +1857,8 @@ function App() {
           }, "\u5171 ", htmlCards.length, " \u5F20")), React.createElement("style", null, HTML_CARD_EXPORT_STYLES), React.createElement("div", {
             className: "visual-card-grid"
           }, htmlCards.map(function (card) {
-            var imageResult = imageResults["visual:".concat(card.imageKey)];
+            var imageResult = imageResults["visual-only:".concat(card.imageKey)];
+            var legacyVisualResult = imageResults["visual:".concat(card.imageKey)];
             return React.createElement("div", {
               key: card.id,
               className: "visual-output-card"
@@ -1791,6 +1870,8 @@ function App() {
               onClick: function onClick() {
                 return exportHtmlCard(card);
               },
+              disabled: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) !== 'success',
+              title: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'success' ? '导出 HTML 成品卡 PNG' : '请先生成无字主视觉',
               className: "visual-button flex items-center justify-center"
             }, React.createElement(Icon, {
               name: "Download",
@@ -1805,9 +1886,9 @@ function App() {
               cardRef: function cardRef(node) {
                 if (node) htmlCardRefs.current[card.id] = node;
               }
-            }))), !imageResult && React.createElement("p", {
-              className: "mt-3 text-center text-[11px] text-slate-400"
-            }, "\u5F53\u524D\u4F7F\u7528\u89C6\u89C9\u5360\u4F4D\uFF0C\u751F\u6210\u4E3B\u89C6\u89C9\u540E\u4F1A\u81EA\u52A8\u66FF\u6362\u3002"));
+            }))), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) !== 'success' && React.createElement("p", {
+              className: "mt-3 text-center text-[11px] ".concat((legacyVisualResult === null || legacyVisualResult === void 0 ? void 0 : legacyVisualResult.status) === 'success' ? 'text-amber-600' : 'text-slate-400')
+            }, (legacyVisualResult === null || legacyVisualResult === void 0 ? void 0 : legacyVisualResult.status) === 'success' ? '旧版主视觉不再用于 HTML 成品卡，请重新生成无字主视觉。' : '当前使用视觉占位，生成无字主视觉后会自动替换。'));
           })), htmlCards.some(function (card) {
             var _imageResults;
             return ((_imageResults = imageResults["full:".concat(card.imageKey)]) === null || _imageResults === void 0 ? void 0 : _imageResults.status) === 'success';
@@ -1839,7 +1920,7 @@ function App() {
               className: "html-card-preview-scale"
             }, React.createElement(HtmlCard, {
               card: card,
-              imageUrl: ((_imageResults3 = imageResults["visual:".concat(card.imageKey)]) === null || _imageResults3 === void 0 ? void 0 : _imageResults3.status) === 'success' ? imageResults["visual:".concat(card.imageKey)].imageUrl : ''
+              imageUrl: ((_imageResults3 = imageResults["visual-only:".concat(card.imageKey)]) === null || _imageResults3 === void 0 ? void 0 : _imageResults3.status) === 'success' ? imageResults["visual-only:".concat(card.imageKey)].imageUrl : ''
             })))), React.createElement("div", null, React.createElement("div", {
               className: "mb-2 text-[11px] font-bold text-indigo-600"
             }, "AI \u6574\u56FE"), React.createElement("div", {
@@ -2097,7 +2178,16 @@ function App() {
     }, feature.desc));
   }))), showResults && React.createElement("div", {
     className: "animate-fade-in-up pb-20"
-  }, renderStageContent()), React.createElement("div", {
+  }, currentSession.isHalted && React.createElement("div", {
+    className: "mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800"
+  }, React.createElement(Icon, {
+    name: "AlertTriangle",
+    className: "mt-0.5 h-4 w-4 shrink-0"
+  }), React.createElement("div", null, React.createElement("div", {
+    className: "text-[12px] font-bold"
+  }, "\u6D41\u7A0B\u672A\u5B8C\u6574\u5B8C\u6210"), React.createElement("div", {
+    className: "mt-1 text-[11px] leading-relaxed"
+  }, currentSession.stopReason || '缺少必要阶段，请检查模型输出限制后重试。'))), renderStageContent()), React.createElement("div", {
     ref: messagesEndRef
   })))), isConfigOpen && React.createElement("div", {
     className: "fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in"

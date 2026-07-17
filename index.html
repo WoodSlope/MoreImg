@@ -8,7 +8,8 @@
   <link rel="icon" href="data:,">
   <title>一文多图</title>
   
-  <!-- 引入高级无衬线字体与等宽字体 -->
+  <!-- 导出卡使用项目内置的 OFL 开源字体，确保 GitHub Pages 与本地排版一致 -->
+  <link rel="stylesheet" href="fonts/noto-sans-sc.css">
   <link rel="stylesheet" href="styles.css">
 
   <!-- React & ReactDOM -->
@@ -203,19 +204,23 @@
     .visual-icon-button { width: 40px; padding: 0; }
     .visual-notice { display: flex; align-items: flex-start; gap: 9px; border-left: 3px solid #d97706; padding: 10px 12px; background: rgba(255,251,235,.72); color: #92400e; font-size: 11px; line-height: 1.6; }
     .visual-panel-notice { border-bottom: 1px solid rgba(203,213,225,.58); border-left: 0; padding: 8px 18px; }
-    .visual-workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) 310px; min-height: 380px; }
+    .visual-workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .82fr); min-height: 380px; }
     .visual-results-column { min-width: 0; padding: 18px; }
     .visual-prompt-column { min-width: 0; border-left: 1px solid var(--mi-border); padding: 18px; background: var(--mi-surface-soft); }
     .visual-column-title { color: var(--mi-text); font-size: 13px; font-weight: 800; line-height: 1.4; }
     .visual-column-copy { margin-top: 5px; color: var(--mi-muted); font-size: 11px; line-height: 1.6; }
-    .visual-result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
+    .visual-result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 320px)); align-items: start; gap: 14px; margin-top: 14px; }
     .visual-result-item { min-width: 0; border: 1px solid rgba(203,213,225,.72); border-radius: 12px; background: #fff; padding: 12px; }
     .visual-result-item-header { display: flex; min-height: 32px; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; color: #334155; font-size: 12px; font-weight: 800; }
     .visual-result-actions { display: flex; align-items: center; gap: 6px; }
     .visual-result-action { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border: 1px solid rgba(203,213,225,.7); border-radius: 8px; background: #fff; color: #6366f1; }
     .visual-result-action:hover { border-color: rgba(99,102,241,.38); background: #eef2ff; }
     .visual-result-action:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
-    .visual-preview { width: 100%; overflow: hidden; border-radius: 10px; background: #eef2f7; }
+    .visual-preview { display: flex; width: 100%; aspect-ratio: 3 / 4; align-items: center; justify-content: center; overflow: hidden; border: 1px solid rgba(203,213,225,.72); border-radius: 10px; background: linear-gradient(145deg, #f8fafc, #eef2f7); }
+    .visual-preview-image { display: block; width: 100%; height: 100%; object-fit: contain; }
+    .visual-preview-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; margin-top: 8px; color: #64748b; font-size: 10px; line-height: 1.45; }
+    .visual-preview-meta strong { color: #475569; font-weight: 750; }
+    .visual-preview-meta-warning { color: #b45309; }
     .visual-empty-result { display: flex; min-height: 260px; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed rgba(148,163,184,.72); border-radius: 12px; padding: 24px; text-align: center; color: #64748b; }
     .visual-empty-result-icon { display: flex; width: 48px; height: 48px; align-items: center; justify-content: center; border-radius: 12px; background: #eef2ff; color: #4f46e5; }
     .visual-checklist { margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 12px; }
@@ -234,6 +239,7 @@
     .visual-comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
     .visual-comparison-item { min-width: 0; }
     .visual-comparison-label { margin-bottom: 10px; color: #475569; font-size: 12px; font-weight: 800; }
+    .visual-comparison-image { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: contain; background: #eef2f7; }
     .visual-card-grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 28px 20px; }
     .visual-output-card { min-width: 0; }
     .visual-output-card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 0 4px; }
@@ -286,6 +292,12 @@
     .config-status-loading { background: #f8fafc; color: #64748b; }
     .config-status-success { background: #ecfdf5; color: #047857; }
     .config-status-error { background: #fff1f2; color: #be123c; }
+    .config-upgrade-notice { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; border: 1px solid #fde68a; border-radius: 8px; padding: 12px; background: #fffbeb; color: #92400e; }
+    .config-upgrade-copy { min-width: 0; flex: 1; font-size: 11px; line-height: 1.55; }
+    .config-upgrade-copy strong { display: block; margin-bottom: 2px; color: #78350f; font-size: 12px; }
+    .config-upgrade-button { display: inline-flex; min-height: 34px; flex-shrink: 0; align-items: center; gap: 6px; border: 1px solid #f59e0b; border-radius: 8px; padding: 0 10px; background: #fff; color: #92400e; font-size: 11px; font-weight: 800; }
+    .config-upgrade-button:hover { background: #fef3c7; }
+    .config-upgrade-button:focus-visible { outline: 2px solid #d97706; outline-offset: 2px; }
     .config-grid { display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 20px; }
     .config-field { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
     .config-label { color: #475569; font-size: 13px; font-weight: 700; line-height: 1.5; }
@@ -322,6 +334,8 @@
       .config-section-header { flex-direction: column; }
       .config-section-actions { width: 100%; justify-content: flex-start; }
       .config-action-button { flex: 1 1 auto; }
+      .config-upgrade-notice { align-items: flex-start; flex-wrap: wrap; }
+      .config-upgrade-button { width: 100%; justify-content: center; }
       .config-textarea { height: 320px; }
       .moreimg-main-scroll { padding-bottom: max(32px, calc(24px + env(safe-area-inset-bottom))); }
       .moreimg-empty-state { height: auto; min-height: 100%; margin-top: 0; padding-bottom: max(48px, calc(32px + env(safe-area-inset-bottom))); }

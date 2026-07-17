@@ -1,4 +1,3 @@
-function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
 var _excluded = ["name", "className", "strokeWidth", "fill"];
 var _templateObject;
 function _regeneratorValues(e) { if (null != e) { var t = e["function" == typeof Symbol && Symbol.iterator || "@@iterator"], r = 0; if (t) return t.call(e); if ("function" == typeof e.next) return e; if (!isNaN(e.length)) return { next: function next() { return e && r >= e.length && (e = void 0), { value: e && e[r++], done: !e }; } }; } throw new TypeError(_typeof(e) + " is not iterable"); }
@@ -25,12 +24,45 @@ function _regenerator() { var e, t, r = "function" == typeof Symbol ? Symbol : {
 function _regeneratorDefine2(e, r, n, t) { var i = Object.defineProperty; try { i({}, "", {}); } catch (e) { i = 0; } _regeneratorDefine2 = function _regeneratorDefine(e, r, n, t) { function o(r, n) { _regeneratorDefine2(e, r, function (e) { return this._invoke(r, n, e); }); } r ? i ? i(e, r, { value: n, enumerable: !t, configurable: !t, writable: !t }) : e[r] = n : (o("next", 0), o("throw", 1), o("return", 2)); }, _regeneratorDefine2(e, r, n, t); }
 function asyncGeneratorStep(n, t, e, r, o, a, c) { try { var i = n[a](c), u = i.value; } catch (n) { return void e(n); } i.done ? t(u) : Promise.resolve(u).then(r, o); }
 function _asyncToGenerator(n) { return function () { var t = this, e = arguments; return new Promise(function (r, o) { var a = n.apply(t, e); function _next(n) { asyncGeneratorStep(a, r, o, _next, _throw, "next", n); } function _throw(n) { asyncGeneratorStep(a, r, o, _next, _throw, "throw", n); } _next(void 0); }); }; }
+function _typeof(o) { "@babel/helpers - typeof"; return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function (o) { return typeof o; } : function (o) { return o && "function" == typeof Symbol && o.constructor === Symbol && o !== Symbol.prototype ? "symbol" : typeof o; }, _typeof(o); }
 var _React = React,
   useState = _React.useState,
   useEffect = _React.useEffect,
   useRef = _React.useRef;
 var IMAGE_DB_NAME = 'moreimg_images';
 var IMAGE_STORE_NAME = 'generated_images';
+var MOREIMG_IMAGE_DIAGNOSTIC_KEY = 'moreimg_last_image_diagnostic';
+var loadLastImageDiagnostic = function loadLastImageDiagnostic() {
+  try {
+    var value = JSON.parse(localStorage.getItem(MOREIMG_IMAGE_DIAGNOSTIC_KEY) || 'null');
+    return value && _typeof(value) === 'object' ? value : null;
+  } catch (_unused) {
+    return null;
+  }
+};
+var getDiagnosticEndpointPath = function getDiagnosticEndpointPath(value) {
+  try {
+    return new URL(value).pathname || '/';
+  } catch (_unused2) {
+    return value ? '自定义接口' : '未记录';
+  }
+};
+var getDiagnosticImageHost = function getDiagnosticImageHost(value) {
+  try {
+    return new URL(value).host || 'API 响应';
+  } catch (_unused3) {
+    return 'API 响应';
+  }
+};
+var getDiagnosticFailureReason = function getDiagnosticFailureReason(error) {
+  var phase = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 'request';
+  var message = String((error === null || error === void 0 ? void 0 : error.message) || '').toLowerCase();
+  if (phase === 'restore') return 'IndexedDB 图片记录读取失败';
+  if (/未返回 url|未返回可识别|未返回图片/.test(message)) return 'API 未返回可识别的图片数据';
+  if (/fetch|network|cors|图片下载|failed to fetch/.test(message)) return '图片 URL 无法读取（CORS、网络或链接失效）';
+  if (phase === 'storage') return 'IndexedDB 图片写入失败';
+  return '生图请求失败';
+};
 var openImageDatabase = function openImageDatabase() {
   return new Promise(function (resolve, reject) {
     var request = indexedDB.open(IMAGE_DB_NAME, 1);
@@ -697,7 +729,7 @@ var parseCardPackage = function parseCardPackage(content) {
     return card.title || card.subtitle || card.points.length || card.summary;
   });
 };
-var HTML_CARD_EXPORT_STYLES = "\n      .moreimg-export-card{box-sizing:border-box;position:relative;isolation:isolate;width:1080px;height:1440px;overflow:hidden;background:#121417;color:#f7f7f2;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"PingFang SC\",\"Microsoft YaHei\",sans-serif;padding:88px;letter-spacing:0}\n      .moreimg-export-card *{box-sizing:border-box}\n      .moreimg-card-media{position:absolute;inset:0;z-index:-4;background:#15171a;overflow:hidden}\n      .moreimg-card-media img{width:100%;height:100%;object-fit:cover;object-position:center 58%;display:block;transform:scale(1.012)}\n      .moreimg-card-body .moreimg-card-media img{object-position:center 54%}\n      .moreimg-card-back .moreimg-card-media img{object-position:center 48%}\n      .moreimg-card-visual-placeholder{position:absolute;inset:0;background:radial-gradient(circle at 62% 66%,rgba(239,232,216,.25),transparent 24%),linear-gradient(155deg,#313842 0%,#15181d 56%,#08090b 100%)}\n      .moreimg-card-shade{position:absolute;inset:0;z-index:-3;pointer-events:none;background:linear-gradient(180deg,rgba(7,9,12,.9) 0%,rgba(7,9,12,.66) 24%,rgba(7,9,12,.08) 58%,rgba(7,9,12,.44) 100%)}\n      .moreimg-card-body .moreimg-card-shade{background:radial-gradient(ellipse at 18% 12%,rgba(5,8,12,.72) 0%,rgba(5,8,12,.36) 33%,transparent 58%),linear-gradient(180deg,rgba(5,8,12,.5) 0%,rgba(5,8,12,.08) 43%,rgba(5,8,12,.24) 61%,rgba(5,8,12,.94) 100%)}\n      .moreimg-card-back .moreimg-card-shade{background:linear-gradient(180deg,rgba(7,9,12,.5) 0%,rgba(7,9,12,.08) 34%,rgba(7,9,12,.14) 56%,rgba(7,9,12,.9) 100%)}\n      .moreimg-card-noise{position:absolute;inset:0;z-index:-2;opacity:.1;background-image:radial-gradient(rgba(255,255,255,.38) .7px,transparent .8px);background-size:7px 7px;mix-blend-mode:soft-light;pointer-events:none}\n      .moreimg-card-content{position:relative;z-index:2;width:100%;height:100%;display:flex;flex-direction:column}\n      .moreimg-card-header{max-width:890px}\n      .moreimg-card-kicker{display:flex;align-items:center;gap:20px;color:rgba(255,255,255,.72);font-size:27px;line-height:1;font-weight:760;letter-spacing:.08em}\n      .moreimg-card-kicker:before{content:\"\";width:64px;height:4px;background:rgba(255,255,255,.78);flex:none}\n      .moreimg-card-title{margin:54px 0 0;font-size:78px;line-height:1.08;font-weight:900;letter-spacing:0;color:#f8f7f2;max-width:920px;overflow-wrap:anywhere;text-wrap:balance;text-shadow:0 4px 34px rgba(0,0,0,.5)}\n      .moreimg-card-subtitle{margin-top:30px;max-width:800px;font-size:33px;line-height:1.45;font-weight:620;color:rgba(255,255,255,.76);text-shadow:0 3px 22px rgba(0,0,0,.48)}\n      .moreimg-card-points{margin-top:auto;padding:0 6px;background:transparent}\n      .moreimg-card-point{min-height:82px;padding:22px 0;display:flex;align-items:center;border-bottom:1px solid rgba(255,255,255,.2);font-size:30px;line-height:1.38;font-weight:700;color:#f4f3ee;text-shadow:0 3px 20px rgba(0,0,0,.72)}\n      .moreimg-card-point:last-child{border-bottom:0}\n      .moreimg-card-point-index{width:58px;margin-right:22px;flex:none;color:rgba(255,255,255,.5);font-size:21px;font-variant-numeric:tabular-nums;letter-spacing:.08em}\n      .moreimg-card-summary{margin-top:22px;padding:24px 6px 0;border-top:2px solid rgba(255,255,255,.36);font-size:31px;line-height:1.4;font-weight:800;color:#f8f7f2;text-shadow:0 3px 20px rgba(0,0,0,.64)}\n      .moreimg-card-body .moreimg-card-title{margin-top:46px;font-size:67px;line-height:1.1;max-width:840px}\n      .moreimg-card-body .moreimg-card-header{max-width:850px}\n      .moreimg-card-back .moreimg-card-content{justify-content:space-between}\n      .moreimg-card-back-copy{max-width:900px;padding-bottom:8px}\n      .moreimg-card-back .moreimg-card-title{margin:0;font-size:68px;line-height:1.16}\n      .moreimg-card-back .moreimg-card-summary{margin-top:34px;padding:26px 0 0;font-size:34px;max-width:820px;color:rgba(255,255,255,.78)}\n    ";
+var HTML_CARD_EXPORT_STYLES = "\n      .moreimg-export-card{box-sizing:border-box;position:relative;isolation:isolate;width:1080px;height:1440px;overflow:hidden;background:#121417;color:#f7f7f2;font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"PingFang SC\",\"Microsoft YaHei\",sans-serif;padding:78px;letter-spacing:0}\n      .moreimg-export-card *{box-sizing:border-box}\n      .moreimg-card-media{position:absolute;inset:0;z-index:-4;background:#15171a;overflow:hidden}\n      .moreimg-card-media img{width:100%;height:100%;object-fit:cover;object-position:center 58%;display:block;transform:scale(1.012)}\n      .moreimg-card-body .moreimg-card-media img{object-position:center 54%}\n      .moreimg-card-back .moreimg-card-media img{object-position:center 48%}\n      .moreimg-card-visual-placeholder{position:absolute;inset:0;background:radial-gradient(circle at 62% 66%,rgba(239,232,216,.25),transparent 24%),linear-gradient(155deg,#313842 0%,#15181d 56%,#08090b 100%)}\n      .moreimg-card-shade{position:absolute;inset:0;z-index:-3;pointer-events:none;background:linear-gradient(180deg,rgba(7,9,12,.9) 0%,rgba(7,9,12,.66) 24%,rgba(7,9,12,.08) 58%,rgba(7,9,12,.44) 100%)}\n      .moreimg-card-body .moreimg-card-shade{background:radial-gradient(ellipse at 18% 12%,rgba(5,8,12,.72) 0%,rgba(5,8,12,.36) 33%,transparent 58%),linear-gradient(180deg,rgba(5,8,12,.5) 0%,rgba(5,8,12,.08) 43%,rgba(5,8,12,.24) 61%,rgba(5,8,12,.94) 100%)}\n      .moreimg-card-back .moreimg-card-shade{background:linear-gradient(180deg,rgba(7,9,12,.5) 0%,rgba(7,9,12,.08) 34%,rgba(7,9,12,.14) 56%,rgba(7,9,12,.9) 100%)}\n      .moreimg-card-noise{position:absolute;inset:0;z-index:-2;opacity:.1;background-image:radial-gradient(rgba(255,255,255,.38) .7px,transparent .8px);background-size:7px 7px;mix-blend-mode:soft-light;pointer-events:none}\n      .moreimg-card-content{position:relative;z-index:2;width:100%;height:100%;display:flex;flex-direction:column}\n      .moreimg-card-header{max-width:890px}\n      .moreimg-card-kicker{display:flex;align-items:center;gap:18px;color:rgba(255,255,255,.76);font-size:29px;line-height:1;font-weight:780;letter-spacing:.06em}\n      .moreimg-card-kicker:before{content:\"\";width:64px;height:4px;background:rgba(255,255,255,.78);flex:none}\n      .moreimg-card-title{margin:44px 0 0;font-size:92px;line-height:1.08;font-weight:920;letter-spacing:0;color:#f8f7f2;max-width:930px;overflow-wrap:anywhere;text-wrap:balance;text-shadow:0 4px 34px rgba(0,0,0,.56)}\n      .moreimg-card-subtitle{margin-top:26px;max-width:840px;font-size:38px;line-height:1.42;font-weight:660;color:rgba(255,255,255,.82);text-shadow:0 3px 22px rgba(0,0,0,.54)}\n      .moreimg-card-points{margin-top:auto;padding:0 6px;background:transparent}\n      .moreimg-card-point{min-height:88px;padding:22px 0;display:flex;align-items:center;border-bottom:1px solid rgba(255,255,255,.22);font-size:36px;line-height:1.34;font-weight:740;color:#f7f6f1;text-shadow:0 3px 20px rgba(0,0,0,.74)}\n      .moreimg-card-point:last-child{border-bottom:0}\n      .moreimg-card-point-index{width:62px;margin-right:20px;flex:none;color:rgba(255,255,255,.54);font-size:23px;font-variant-numeric:tabular-nums;letter-spacing:.08em}\n      .moreimg-card-summary{margin-top:20px;padding:24px 6px 0;border-top:2px solid rgba(255,255,255,.4);font-size:37px;line-height:1.36;font-weight:840;color:#fbfaf5;text-shadow:0 3px 20px rgba(0,0,0,.68)}\n      .moreimg-card-body .moreimg-card-title{margin-top:38px;font-size:80px;line-height:1.08;max-width:900px}\n      .moreimg-card-body .moreimg-card-header{max-width:850px}\n      .moreimg-card-back .moreimg-card-content{justify-content:space-between}\n      .moreimg-card-back-copy{max-width:900px;padding-bottom:8px}\n      .moreimg-card-back .moreimg-card-title{margin:0;font-size:80px;line-height:1.13}\n      .moreimg-card-back .moreimg-card-summary{margin-top:30px;padding:26px 0 0;font-size:40px;max-width:860px;color:rgba(255,255,255,.84)}\n    ";
 var HtmlCard = function HtmlCard(_ref3) {
   var card = _ref3.card,
     imageUrl = _ref3.imageUrl,
@@ -789,6 +821,16 @@ var ConfigStatus = function ConfigStatus(_ref5) {
     className: "mt-0.5 h-3.5 w-3.5 shrink-0 ".concat(state.status === 'loading' ? 'animate-spin' : '')
   }), React.createElement("span", null, state.message));
 };
+var hasSavedApiConfig = function hasSavedApiConfig() {
+  try {
+    var savedConfig = localStorage.getItem('agent_api_config');
+    if (!savedConfig) return false;
+    var parsedConfig = JSON.parse(savedConfig);
+    return Boolean(parsedConfig.apiKey && typeof parsedConfig.systemPrompt === 'string' && parsedConfig.systemPrompt.trim());
+  } catch (_unused4) {
+    return false;
+  }
+};
 function App() {
   var _useState = useState({
       apiUrl: 'https://api.deepseek.com/v1/chat/completions',
@@ -803,7 +845,9 @@ function App() {
     _useState2 = _slicedToArray(_useState, 2),
     apiConfig = _useState2[0],
     setApiConfig = _useState2[1];
-  var _useState3 = useState(true),
+  var _useState3 = useState(function () {
+      return !hasSavedApiConfig();
+    }),
     _useState4 = _slicedToArray(_useState3, 2),
     isConfigOpen = _useState4[0],
     setIsConfigOpen = _useState4[1];
@@ -835,27 +879,35 @@ function App() {
     _useState16 = _slicedToArray(_useState15, 2),
     activeStageTab = _useState16[0],
     setActiveStageTab = _useState16[1];
-  var _useState17 = useState(null),
+  var _useState17 = useState(''),
     _useState18 = _slicedToArray(_useState17, 2),
-    toast = _useState18[0],
-    setToast = _useState18[1];
-  var _useState19 = useState({}),
+    activeVisualPage = _useState18[0],
+    setActiveVisualPage = _useState18[1];
+  var _useState19 = useState(null),
     _useState20 = _slicedToArray(_useState19, 2),
-    imageResults = _useState20[0],
-    setImageResults = _useState20[1];
+    toast = _useState20[0],
+    setToast = _useState20[1];
   var _useState21 = useState({}),
     _useState22 = _slicedToArray(_useState21, 2),
-    hiddenFullImages = _useState22[0],
-    setHiddenFullImages = _useState22[1];
-  var _useState23 = useState([]),
+    imageResults = _useState22[0],
+    setImageResults = _useState22[1];
+  var _useState23 = useState(loadLastImageDiagnostic),
     _useState24 = _slicedToArray(_useState23, 2),
-    textModels = _useState24[0],
-    setTextModels = _useState24[1];
-  var _useState25 = useState([]),
+    lastImageDiagnostic = _useState24[0],
+    setLastImageDiagnostic = _useState24[1];
+  var _useState25 = useState({}),
     _useState26 = _slicedToArray(_useState25, 2),
-    imageModels = _useState26[0],
-    setImageModels = _useState26[1];
-  var _useState27 = useState({
+    hiddenFullImages = _useState26[0],
+    setHiddenFullImages = _useState26[1];
+  var _useState27 = useState([]),
+    _useState28 = _slicedToArray(_useState27, 2),
+    textModels = _useState28[0],
+    setTextModels = _useState28[1];
+  var _useState29 = useState([]),
+    _useState30 = _slicedToArray(_useState29, 2),
+    imageModels = _useState30[0],
+    setImageModels = _useState30[1];
+  var _useState31 = useState({
       textModels: {
         status: 'idle',
         message: ''
@@ -869,14 +921,14 @@ function App() {
         message: ''
       }
     }),
-    _useState28 = _slicedToArray(_useState27, 2),
-    configTools = _useState28[0],
-    setConfigTools = _useState28[1];
-  var _useState29 = useState(false),
-    _useState30 = _slicedToArray(_useState29, 2),
-    isInputFocused = _useState30[0],
-    setIsInputFocused = _useState30[1];
-  var _useState31 = useState({
+    _useState32 = _slicedToArray(_useState31, 2),
+    configTools = _useState32[0],
+    setConfigTools = _useState32[1];
+  var _useState33 = useState(false),
+    _useState34 = _slicedToArray(_useState33, 2),
+    isInputFocused = _useState34[0],
+    setIsInputFocused = _useState34[1];
+  var _useState35 = useState({
       rawText: '',
       stages: {
         1: '',
@@ -890,9 +942,9 @@ function App() {
       stopReason: '',
       warning: ''
     }),
-    _useState32 = _slicedToArray(_useState31, 2),
-    currentSession = _useState32[0],
-    setCurrentSession = _useState32[1];
+    _useState36 = _slicedToArray(_useState35, 2),
+    currentSession = _useState36[0],
+    setCurrentSession = _useState36[1];
   var messagesEndRef = useRef(null);
   var imageObjectUrlsRef = useRef([]);
   var htmlCardRefs = useRef({});
@@ -901,6 +953,15 @@ function App() {
   var updateConfigTool = function updateConfigTool(key, nextState) {
     setConfigTools(function (prev) {
       return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, key, _objectSpread(_objectSpread({}, prev[key]), nextState)));
+    });
+  };
+  var saveLastImageDiagnostic = function saveLastImageDiagnostic(patch) {
+    setLastImageDiagnostic(function (previous) {
+      var next = _objectSpread(_objectSpread(_objectSpread({}, previous || {}), patch), {}, {
+        updatedAt: new Date().toISOString()
+      });
+      localStorage.setItem(MOREIMG_IMAGE_DIAGNOSTIC_KEY, JSON.stringify(next));
+      return next;
     });
   };
   useEffect(function () {
@@ -933,7 +994,7 @@ function App() {
   };
   var restoreSessionImages = function () {
     var _restoreSessionImages = _asyncToGenerator(_regenerator().m(function _callee4(sessionId) {
-      var storedImages, nextResults, _t;
+      var _loadLastImageDiagnos, storedImages, nextResults, _loadLastImageDiagnos2, _t;
       return _regenerator().w(function (_context4) {
         while (1) switch (_context4.p = _context4.n) {
           case 0:
@@ -953,11 +1014,23 @@ function App() {
               };
             });
             replaceImageResults(nextResults);
+            if (((_loadLastImageDiagnos = loadLastImageDiagnostic()) === null || _loadLastImageDiagnos === void 0 ? void 0 : _loadLastImageDiagnos.sessionId) === sessionId) {
+              saveLastImageDiagnostic({
+                restoreStatus: storedImages.length ? '成功' : '失败',
+                failureReason: storedImages.length ? '' : '未找到可恢复的本地图片'
+              });
+            }
             _context4.n = 3;
             break;
           case 2:
             _context4.p = 2;
             _t = _context4.v;
+            if (((_loadLastImageDiagnos2 = loadLastImageDiagnostic()) === null || _loadLastImageDiagnos2 === void 0 ? void 0 : _loadLastImageDiagnos2.sessionId) === sessionId) {
+              saveLastImageDiagnostic({
+                restoreStatus: '失败',
+                failureReason: getDiagnosticFailureReason(_t, 'restore')
+              });
+            }
             setToast({
               message: "\u56FE\u7247\u8BB0\u5F55\u8BFB\u53D6\u5931\u8D25: ".concat(_t.message),
               type: 'error'
@@ -1106,6 +1179,16 @@ function App() {
     }
     return handleLoadModels;
   }();
+  var handleModelSelection = function handleModelSelection(kind, value) {
+    if (value === '__manual__') {
+      if (kind === 'image') setImageModels([]);else setTextModels([]);
+      return;
+    }
+    var configKey = kind === 'image' ? 'imageModel' : 'model';
+    setApiConfig(function (prev) {
+      return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, configKey, value));
+    });
+  };
   var handleTestTextConnection = function () {
     var _handleTestTextConnection = _asyncToGenerator(_regenerator().m(function _callee6() {
       var endpoint, model, apiKey, startedAt, _data$error2, messages, response, data, responseText, elapsedMs, preview, _t3;
@@ -1197,6 +1280,8 @@ function App() {
     var _handleGenerateImage = _asyncToGenerator(_regenerator().m(function _callee7(cardTitle, prompt) {
       var mode,
         resultKey,
+        diagnosticPhase,
+        sessionId,
         _data$data,
         response,
         data,
@@ -1205,7 +1290,6 @@ function App() {
         remoteUrl,
         dataUrl,
         imageBlob,
-        sessionId,
         imageUrl,
         generationLabel,
         _args7 = arguments,
@@ -1234,6 +1318,20 @@ function App() {
                 error: '',
                 mode: mode
               }));
+            });
+            diagnosticPhase = 'request';
+            sessionId = activeHistoryId || 'current';
+            saveLastImageDiagnostic({
+              sessionId: sessionId,
+              requestMode: '同步',
+              endpointPath: getDiagnosticEndpointPath(apiConfig.imageApiUrl.trim()),
+              requestedFormat: '由 API 决定',
+              actualFormat: '等待响应',
+              imageHost: '等待响应',
+              storageBackend: 'IndexedDB',
+              storageStatus: '等待保存',
+              restoreStatus: '尚未验证',
+              failureReason: ''
             });
             _context7.p = 2;
             _context7.n = 3;
@@ -1271,6 +1369,12 @@ function App() {
             }
             throw new Error('接口未返回 url 或 b64_json 图片数据');
           case 6:
+            diagnosticPhase = 'storage';
+            saveLastImageDiagnostic({
+              actualFormat: dataUrl ? 'Base64' : 'URL',
+              imageHost: dataUrl ? 'API 响应' : getDiagnosticImageHost(remoteUrl),
+              storageStatus: '保存中'
+            });
             if (!dataUrl) {
               _context7.n = 7;
               break;
@@ -1288,10 +1392,15 @@ function App() {
             _t4 = _context7.v;
           case 9:
             imageBlob = _t4;
-            sessionId = activeHistoryId || 'current';
             _context7.n = 10;
             return saveImageBlob(sessionId, cardTitle, imageBlob, mode);
           case 10:
+            saveLastImageDiagnostic({
+              storageBackend: 'IndexedDB',
+              storageStatus: '成功',
+              restoreStatus: '尚未验证',
+              failureReason: ''
+            });
             imageUrl = URL.createObjectURL(imageBlob);
             setImageResults(function (prev) {
               var _prev$resultKey;
@@ -1321,6 +1430,10 @@ function App() {
           case 11:
             _context7.p = 11;
             _t5 = _context7.v;
+            saveLastImageDiagnostic({
+              storageStatus: diagnosticPhase === 'storage' ? '失败' : '未开始',
+              failureReason: getDiagnosticFailureReason(_t5, diagnosticPhase)
+            });
             setImageResults(function (prev) {
               return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, resultKey, {
                 status: 'error',
@@ -2000,7 +2113,7 @@ function App() {
         key: sId,
         className: "animate-fade-in-up"
       }, React.createElement("div", {
-        className: "flex items-center mb-6 px-2"
+        className: "flex items-center px-2 ".concat(sId === 5 ? 'mb-4' : 'mb-6')
       }, React.createElement("div", {
         className: "h-4 w-1 bg-indigo-500 rounded-full mr-3"
       }), React.createElement("h4", {
@@ -2043,249 +2156,297 @@ function App() {
         var promptSections = parsePromptSections(content);
         var htmlCards = parseCardPackage(currentSession.stages[4]);
         if (promptSections.length > 0) {
+          var selectedPromptSection = promptSections.find(function (section) {
+            return section.title === activeVisualPage;
+          }) || promptSections[0];
+          var selectedPromptIndex = promptSections.findIndex(function (section) {
+            return section.title === selectedPromptSection.title;
+          });
+          var cleanPromptText = selectedPromptSection.text.replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim();
+          var imageResult = imageResults["visual-only:".concat(selectedPromptSection.title)];
+          var legacyVisualResult = imageResults["visual:".concat(selectedPromptSection.title)];
+          var fullImageResult = imageResults["full:".concat(selectedPromptSection.title)];
+          var matchingCard = htmlCards.find(function (card) {
+            return card.imageKey === selectedPromptSection.title;
+          });
+          var selectedHtmlCard = matchingCard || htmlCards[selectedPromptIndex] || htmlCards[0];
+          var selectedHtmlImageResult = selectedHtmlCard ? imageResults["visual-only:".concat(selectedHtmlCard.imageKey)] : null;
+          var selectedHtmlLegacyResult = selectedHtmlCard ? imageResults["visual:".concat(selectedHtmlCard.imageKey)] : null;
+          var visualOnlyPrompt = buildVisualOnlyPrompt(cleanPromptText, matchingCard);
+          var fullImageVisibleText = getCardVisibleText(matchingCard);
+          var fullImagePrompt = buildFullImagePrompt(cleanPromptText, matchingCard);
+          var hasVisibleResult = (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'success' || (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'success' && !hiddenFullImages[selectedPromptSection.title];
+          var isGenerating = (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' || (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading';
           return React.createElement("div", {
             className: "visual-workbench"
+          }, React.createElement("section", {
+            className: "visual-panel"
           }, React.createElement("div", {
-            className: "visual-prompt-list"
-          }, promptSections.map(function (sec, i) {
-            var cleanPromptText = sec.text.replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim();
-            var imageResult = imageResults["visual-only:".concat(sec.title)];
-            var legacyVisualResult = imageResults["visual:".concat(sec.title)];
-            var fullImageResult = imageResults["full:".concat(sec.title)];
-            var matchingCard = htmlCards.find(function (card) {
-              return card.imageKey === sec.title;
-            });
-            var visualOnlyPrompt = buildVisualOnlyPrompt(cleanPromptText, matchingCard);
-            var fullImageVisibleText = getCardVisibleText(matchingCard);
-            var fullImagePrompt = buildFullImagePrompt(cleanPromptText, matchingCard);
+            className: "visual-page-toolbar"
+          }, React.createElement("div", {
+            className: "visual-page-tabs hide-scrollbar",
+            role: "tablist",
+            "aria-label": "\u9009\u62E9\u5361\u7247\u9875\u9762"
+          }, promptSections.map(function (section) {
+            return React.createElement("button", {
+              key: section.title,
+              type: "button",
+              role: "tab",
+              "aria-selected": section.title === selectedPromptSection.title,
+              onClick: function onClick() {
+                return setActiveVisualPage(section.title);
+              },
+              className: "visual-page-tab ".concat(section.title === selectedPromptSection.title ? 'visual-page-tab-active' : '')
+            }, section.title);
+          }))), React.createElement("div", {
+            className: "visual-panel-header"
+          }, React.createElement("div", {
+            className: "visual-panel-title-group"
+          }, React.createElement("div", {
+            className: "visual-panel-title"
+          }, React.createElement(Icon, {
+            name: "Image",
+            className: "mr-2 h-4 w-4 text-indigo-600"
+          }), selectedPromptSection.title), React.createElement("div", {
+            className: "visual-panel-meta"
+          }, "\u7B2C ", selectedPromptIndex + 1, " \u9875\uFF0C\u5171 ", promptSections.length, " \u9875")), React.createElement("div", {
+            className: "visual-panel-actions"
+          }, React.createElement("button", {
+            onClick: function onClick() {
+              return handleGenerateImage(selectedPromptSection.title, visualOnlyPrompt, 'visual-only');
+            },
+            disabled: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading',
+            className: "visual-button visual-button-primary"
+          }, React.createElement(Icon, {
+            name: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? 'LoaderCircle' : 'Sparkles',
+            className: "mr-2 h-4 w-4 ".concat((imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? 'animate-spin' : '')
+          }), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? '生成中' : imageResult ? '重生成主视觉' : '生成主视觉'), React.createElement("button", {
+            onClick: function onClick() {
+              return handleGenerateImage(selectedPromptSection.title, fullImagePrompt, 'full');
+            },
+            disabled: (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading',
+            className: "visual-button"
+          }, React.createElement(Icon, {
+            name: (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? 'LoaderCircle' : 'LayoutTemplate',
+            className: "mr-2 h-4 w-4 ".concat((fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? 'animate-spin' : '')
+          }), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? '生成中' : fullImageResult ? '重生成整图' : '生成 AI 整图'), React.createElement("button", {
+            onClick: function onClick() {
+              return copyToClipboard(cleanPromptText, "[".concat(selectedPromptSection.title, "]"));
+            },
+            className: "visual-button visual-icon-button",
+            "aria-label": "\u590D\u5236\u5F53\u524D\u9875\u63D0\u793A\u8BCD",
+            title: "\u590D\u5236\u5F53\u524D\u9875\u63D0\u793A\u8BCD"
+          }, React.createElement(Icon, {
+            name: "Copy",
+            className: "h-4 w-4"
+          })))), React.createElement("div", {
+            className: "visual-notice visual-panel-notice"
+          }, React.createElement(Icon, {
+            name: "Info",
+            className: "mt-0.5 h-3.5 w-3.5 shrink-0"
+          }), React.createElement("span", null, "HTML \u6210\u54C1\u5361\u7528\u4E8E\u51C6\u786E\u4E2D\u6587\u4EA4\u4ED8\uFF1BAI \u6574\u56FE\u7528\u4E8E\u89C6\u89C9\u5019\u9009\uFF0C\u751F\u6210\u540E\u4ECD\u9700\u6838\u5BF9\u6587\u5B57\u3002")), React.createElement("div", {
+            className: "visual-workspace-grid"
+          }, React.createElement("div", {
+            className: "visual-results-column"
+          }, React.createElement("div", {
+            className: "visual-column-title"
+          }, "\u751F\u6210\u7ED3\u679C"), React.createElement("div", {
+            className: "visual-column-copy"
+          }, "\u4E3B\u89C6\u89C9\u7528\u4E8E HTML \u5408\u6210\u5361\uFF0CAI \u6574\u56FE\u7528\u4E8E\u89C6\u89C9\u6BD4\u8F83\u3002"), (legacyVisualResult === null || legacyVisualResult === void 0 ? void 0 : legacyVisualResult.status) === 'success' && (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) !== 'success' && React.createElement("div", {
+            className: "visual-notice mt-4"
+          }, "\u65E7\u7248\u4E3B\u89C6\u89C9\u4E0D\u80FD\u7528\u4E8E HTML \u6210\u54C1\u5361\uFF0C\u8BF7\u91CD\u65B0\u751F\u6210\u4E3B\u89C6\u89C9\u3002"), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'error' && React.createElement("div", {
+            className: "visual-error"
+          }, "\u56FE\u7247\u751F\u6210\u5931\u8D25\uFF1A", imageResult.error), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'error' && React.createElement("div", {
+            className: "visual-error"
+          }, "AI \u6574\u56FE\u751F\u6210\u5931\u8D25\uFF1A", fullImageResult.error), !hasVisibleResult && React.createElement("div", {
+            className: "visual-empty-result mt-4"
+          }, React.createElement("div", {
+            className: "visual-empty-result-icon"
+          }, React.createElement(Icon, {
+            name: isGenerating ? 'LoaderCircle' : 'ImagePlus',
+            className: "h-5 w-5 ".concat(isGenerating ? 'animate-spin' : '')
+          })), React.createElement("div", {
+            className: "mt-4 text-[13px] font-bold text-slate-700"
+          }, isGenerating ? '正在生成当前页面' : '当前页面还没有图片'), React.createElement("p", {
+            className: "mt-2 max-w-[34ch] text-[11px] leading-relaxed"
+          }, "\u5148\u751F\u6210\u4E3B\u89C6\u89C9\uFF0CHTML \u6210\u54C1\u5361\u4F1A\u81EA\u52A8\u4F7F\u7528\u5B83\uFF1B\u9700\u8981\u6A21\u578B\u76F4\u63A5\u6392\u7248\u65F6\u518D\u751F\u6210 AI \u6574\u56FE\u3002")), hasVisibleResult && React.createElement("div", {
+            className: "visual-result-grid"
+          }, (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'success' && React.createElement("div", {
+            className: "visual-result-item"
+          }, React.createElement("div", {
+            className: "visual-result-item-header"
+          }, React.createElement("span", null, "HTML \u4E3B\u89C6\u89C9"), React.createElement("button", {
+            onClick: function onClick() {
+              return downloadImage(selectedPromptSection.title, imageResult.imageUrl);
+            },
+            className: "visual-result-action",
+            "aria-label": "\u4E0B\u8F7D\u4E3B\u89C6\u89C9",
+            title: "\u4E0B\u8F7D\u4E3B\u89C6\u89C9"
+          }, React.createElement(Icon, {
+            name: "Download",
+            className: "h-3.5 w-3.5"
+          }))), React.createElement("div", {
+            className: "visual-preview",
+            style: {
+              aspectRatio: (imageResult.size || apiConfig.imageSize || '1024x1536').replace('x', ' / ')
+            }
+          }, React.createElement("img", {
+            src: imageResult.imageUrl,
+            alt: "".concat(selectedPromptSection.title, " \u751F\u6210\u7ED3\u679C"),
+            className: "h-full w-full object-cover"
+          }))), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'success' && !hiddenFullImages[selectedPromptSection.title] && React.createElement("div", {
+            className: "visual-result-item"
+          }, React.createElement("div", {
+            className: "visual-result-item-header"
+          }, React.createElement("span", null, "AI \u6574\u56FE"), React.createElement("div", {
+            className: "visual-result-actions"
+          }, React.createElement("button", {
+            onClick: function onClick() {
+              return downloadImage("".concat(selectedPromptSection.title, "-AI\u6574\u56FE"), fullImageResult.imageUrl);
+            },
+            className: "visual-result-action",
+            "aria-label": "\u4E0B\u8F7D AI \u6574\u56FE",
+            title: "\u4E0B\u8F7D AI \u6574\u56FE"
+          }, React.createElement(Icon, {
+            name: "Download",
+            className: "h-3.5 w-3.5"
+          })), React.createElement("button", {
+            onClick: function onClick() {
+              return setHiddenFullImages(function (prev) {
+                return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, selectedPromptSection.title, true));
+              });
+            },
+            className: "visual-result-action",
+            "aria-label": "\u9690\u85CF AI \u6574\u56FE",
+            title: "\u9690\u85CF AI \u6574\u56FE"
+          }, React.createElement(Icon, {
+            name: "EyeOff",
+            className: "h-3.5 w-3.5"
+          })))), React.createElement("div", {
+            className: "visual-preview",
+            style: {
+              aspectRatio: (fullImageResult.size || apiConfig.imageSize || '1024x1536').replace('x', ' / ')
+            }
+          }, React.createElement("img", {
+            src: fullImageResult.imageUrl,
+            alt: "".concat(selectedPromptSection.title, " AI \u6574\u56FE"),
+            className: "h-full w-full object-cover"
+          })), React.createElement("div", {
+            className: "visual-checklist"
+          }, React.createElement("div", {
+            className: "mb-2 text-[11px] font-bold text-slate-700"
+          }, "\u6587\u5B57\u6838\u5BF9"), React.createElement("div", {
+            className: "space-y-2"
+          }, fullImageVisibleText.map(function (text, textIndex) {
+            return React.createElement("label", {
+              key: "".concat(selectedPromptSection.title, "-check-").concat(textIndex),
+              className: "visual-check-item"
+            }, React.createElement("input", {
+              type: "checkbox",
+              className: "mt-0.5 h-4 w-4 shrink-0 accent-indigo-600"
+            }), React.createElement("span", null, text));
+          }))))), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'success' && hiddenFullImages[selectedPromptSection.title] && React.createElement("div", {
+            className: "mt-4 flex items-center justify-between border-t border-slate-200 pt-4 text-[12px] text-slate-600"
+          }, React.createElement("span", null, "AI \u6574\u56FE\u5DF2\u9690\u85CF"), React.createElement("button", {
+            onClick: function onClick() {
+              return setHiddenFullImages(function (prev) {
+                return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, selectedPromptSection.title, false));
+              });
+            },
+            className: "visual-button"
+          }, React.createElement(Icon, {
+            name: "Eye",
+            className: "mr-2 h-3.5 w-3.5"
+          }), "\u663E\u793A\u6574\u56FE"))), React.createElement("aside", {
+            className: "visual-prompt-column"
+          }, React.createElement("div", {
+            className: "visual-column-title"
+          }, "\u672C\u9875\u5185\u5BB9\u4E0E\u63D0\u793A\u8BCD"), React.createElement("div", {
+            className: "visual-column-copy"
+          }, "\u9875\u9762\u6587\u5B57\u6765\u81EA\u5185\u5BB9\u5305\uFF0C\u56FE\u7247\u63D0\u793A\u8BCD\u9ED8\u8BA4\u6536\u8D77\uFF0C\u51CF\u5C11\u9605\u8BFB\u5E72\u6270\u3002"), React.createElement("div", {
+            className: "visual-text-list"
+          }, fullImageVisibleText.map(function (text, textIndex) {
             return React.createElement("div", {
-              key: i,
-              className: "visual-panel"
-            }, React.createElement("div", {
-              className: "visual-panel-header"
-            }, React.createElement("span", {
-              className: "visual-panel-title"
-            }, React.createElement(Icon, {
-              name: "Image",
-              className: "w-4 h-4 mr-2 text-indigo-600"
-            }), " ", sec.title), React.createElement("div", {
-              className: "visual-panel-actions"
-            }, React.createElement("button", {
-              onClick: function onClick() {
-                return handleGenerateImage(sec.title, visualOnlyPrompt, 'visual-only');
-              },
-              disabled: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading',
-              className: "visual-button visual-button-primary flex items-center justify-center"
-            }, React.createElement(Icon, {
-              name: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? 'LoaderCircle' : 'Sparkles',
-              className: "w-4 h-4 mr-2 ".concat((imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? 'animate-spin' : '')
-            }), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? '生成中' : imageResult ? '重新生成无字主视觉' : '生成无字主视觉'), React.createElement("button", {
-              onClick: function onClick() {
-                return handleGenerateImage(sec.title, fullImagePrompt, 'full');
-              },
-              disabled: (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading',
-              className: "visual-button flex items-center justify-center"
-            }, React.createElement(Icon, {
-              name: (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? 'LoaderCircle' : 'LayoutTemplate',
-              className: "w-4 h-4 mr-1.5 ".concat((fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? 'animate-spin' : '')
-            }), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? '生成中' : fullImageResult ? '重生成整图' : '生成 AI 整图'), React.createElement("button", {
-              onClick: function onClick() {
-                return copyToClipboard(cleanPromptText, "[".concat(sec.title, "]"));
-              },
-              className: "visual-button visual-icon-button",
-              "aria-label": "\u590D\u5236\u5355\u6BB5\u6307\u4EE4",
-              title: "\u590D\u5236\u5355\u6BB5\u6307\u4EE4"
-            }, React.createElement(Icon, {
-              name: "Copy",
-              className: "w-4 h-4"
-            })))), React.createElement("div", {
-              className: "visual-notice"
-            }, "AI \u6574\u56FE\u5C5E\u4E8E\u5B9E\u9A8C\u6027\u8F93\u51FA\uFF0C\u53EF\u80FD\u51FA\u73B0\u9519\u5B57\u3001\u6F0F\u5B57\u6216\u6392\u7248\u504F\u5DEE\u3002\u9700\u8981\u51C6\u786E\u4E2D\u6587\u65F6\uFF0C\u8BF7\u4F7F\u7528 HTML \u6210\u54C1\u5361\u3002"), (legacyVisualResult === null || legacyVisualResult === void 0 ? void 0 : legacyVisualResult.status) === 'success' && (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) !== 'success' && React.createElement("div", {
-              className: "mx-4 md:mx-6 mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-relaxed text-amber-700"
-            }, "\u65E7\u7248\u4E3B\u89C6\u89C9\u4E0D\u518D\u7528\u4E8E HTML \u6210\u54C1\u5361\uFF0C\u8BF7\u91CD\u65B0\u751F\u6210\u65E0\u5B57\u4E3B\u89C6\u89C9\u3002"), React.createElement("details", {
-              className: "visual-disclosure"
-            }, React.createElement("summary", {
-              className: "cursor-pointer select-none"
-            }, "\u67E5\u770B AI \u6574\u56FE\u5B9E\u9645\u8BF7\u6C42\u63D0\u793A\u8BCD"), React.createElement("div", null, React.createElement("pre", {
-              className: "visual-prompt-copy"
-            }, React.createElement("code", null, fullImagePrompt)), React.createElement("button", {
-              onClick: function onClick() {
-                return copyToClipboard(fullImagePrompt, "[".concat(sec.title, "] AI \u6574\u56FE\u8BF7\u6C42"));
-              },
-              className: "visual-button mb-3 flex items-center"
-            }, React.createElement(Icon, {
-              name: "Copy",
-              className: "mr-1.5 h-3.5 w-3.5"
-            }), "\u590D\u5236\u5B9E\u9645\u8BF7\u6C42"))), React.createElement("pre", {
-              className: "visual-prompt-source font-mono"
-            }, React.createElement("code", null, cleanPromptText)), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'error' && React.createElement("div", {
-              className: "mx-4 md:mx-6 mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12px] leading-relaxed text-red-600"
-            }, "\u56FE\u7247\u751F\u6210\u5931\u8D25\uFF1A", imageResult.error), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'success' && React.createElement("div", {
-              className: "visual-result-band"
-            }, React.createElement("div", {
-              className: "visual-preview",
-              style: {
-                aspectRatio: (imageResult.size || apiConfig.imageSize || '1024x1536').replace('x', ' / ')
-              }
-            }, React.createElement("img", {
-              src: imageResult.imageUrl,
-              alt: "".concat(sec.title, " \u751F\u6210\u7ED3\u679C"),
-              className: "h-full w-full object-cover"
-            })), React.createElement("div", {
-              className: "mt-4 flex justify-center"
-            }, React.createElement("button", {
-              onClick: function onClick() {
-                return downloadImage(sec.title, imageResult.imageUrl);
-              },
-              className: "visual-button flex items-center justify-center"
-            }, React.createElement(Icon, {
-              name: "Download",
-              className: "w-4 h-4 mr-2"
-            }), " \u4E0B\u8F7D\u56FE\u7247"))), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'error' && React.createElement("div", {
-              className: "mx-4 md:mx-6 mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12px] leading-relaxed text-red-600"
-            }, "AI \u6574\u56FE\u751F\u6210\u5931\u8D25\uFF1A", fullImageResult.error), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'success' && !hiddenFullImages[sec.title] && React.createElement("div", {
-              className: "visual-result-band"
-            }, React.createElement("div", {
-              className: "mb-3 text-[12px] font-bold text-slate-700"
-            }, "AI \u6574\u56FE\uFF08\u6A21\u578B\u76F4\u63A5\u6392\u7248\uFF09"), React.createElement("div", {
-              className: "visual-preview",
-              style: {
-                aspectRatio: (fullImageResult.size || apiConfig.imageSize || '1024x1536').replace('x', ' / ')
-              }
-            }, React.createElement("img", {
-              src: fullImageResult.imageUrl,
-              alt: "".concat(sec.title, " AI \u6574\u56FE"),
-              className: "h-full w-full object-cover"
-            })), React.createElement("div", {
-              className: "visual-checklist"
-            }, React.createElement("div", {
-              className: "mb-3 text-[12px] font-bold text-slate-800"
-            }, "\u6587\u5B57\u6838\u5BF9\u6E05\u5355"), React.createElement("div", {
-              className: "space-y-2"
-            }, fullImageVisibleText.map(function (text, textIndex) {
-              return React.createElement("label", {
-                key: "".concat(sec.title, "-check-").concat(textIndex),
-                className: "flex cursor-pointer items-start gap-2 text-[11px] leading-relaxed text-slate-600"
-              }, React.createElement("input", {
-                type: "checkbox",
-                className: "mt-0.5 h-4 w-4 shrink-0 accent-indigo-600"
-              }), React.createElement("span", null, text));
-            })), React.createElement("p", {
-              className: "mt-3 border-t border-slate-100 pt-3 text-[10px] leading-relaxed text-slate-400"
-            }, "\u8BF7\u9010\u9879\u5BF9\u7167\u56FE\u7247\u4E2D\u7684\u6587\u5B57\uFF1B\u5168\u90E8\u786E\u8BA4\u540E\u518D\u4E0B\u8F7D\u4F5C\u4E3A\u5019\u9009\u7248\u672C\u3002")), React.createElement("div", {
-              className: "mt-4 flex flex-wrap justify-center gap-2"
-            }, React.createElement("button", {
-              onClick: function onClick() {
-                return downloadImage("".concat(sec.title, "-AI\u6574\u56FE"), fullImageResult.imageUrl);
-              },
-              className: "visual-button flex items-center justify-center"
-            }, React.createElement(Icon, {
-              name: "Download",
-              className: "w-4 h-4 mr-2"
-            }), " \u4E0B\u8F7D AI \u6574\u56FE"), React.createElement("button", {
-              onClick: function onClick() {
-                return setHiddenFullImages(function (prev) {
-                  return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, sec.title, true));
-                });
-              },
-              className: "visual-button"
-            }, "\u9690\u85CF\u9884\u89C8"))), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'success' && hiddenFullImages[sec.title] && React.createElement("div", {
-              className: "mx-4 md:mx-6 mb-6 flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-[12px] text-indigo-700"
-            }, React.createElement("span", null, "AI \u6574\u56FE\u5DF2\u751F\u6210\uFF0C\u9884\u89C8\u5DF2\u9690\u85CF\u3002"), React.createElement("button", {
-              onClick: function onClick() {
-                return setHiddenFullImages(function (prev) {
-                  return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, sec.title, false));
-                });
-              },
-              className: "font-bold underline"
-            }, "\u663E\u793A\u9884\u89C8")));
-          })), htmlCards.length > 0 && React.createElement("section", {
+              key: "".concat(selectedPromptSection.title, "-text-").concat(textIndex),
+              className: "visual-text-item"
+            }, text);
+          })), React.createElement("details", {
+            className: "visual-disclosure"
+          }, React.createElement("summary", {
+            className: "cursor-pointer select-none"
+          }, "\u539F\u59CB\u89C6\u89C9\u63D0\u793A\u8BCD"), React.createElement("pre", {
+            className: "visual-prompt-copy font-mono"
+          }, React.createElement("code", null, cleanPromptText))), React.createElement("details", {
+            className: "visual-disclosure"
+          }, React.createElement("summary", {
+            className: "cursor-pointer select-none"
+          }, "AI \u6574\u56FE\u5B9E\u9645\u8BF7\u6C42"), React.createElement("pre", {
+            className: "visual-prompt-copy font-mono"
+          }, React.createElement("code", null, fullImagePrompt)), React.createElement("button", {
+            onClick: function onClick() {
+              return copyToClipboard(fullImagePrompt, "[".concat(selectedPromptSection.title, "] AI \u6574\u56FE\u8BF7\u6C42"));
+            },
+            className: "visual-button mb-3"
+          }, React.createElement(Icon, {
+            name: "Copy",
+            className: "mr-2 h-3.5 w-3.5"
+          }), "\u590D\u5236\u8BF7\u6C42"))))), htmlCards.length > 0 && React.createElement("section", {
             className: "visual-section"
           }, React.createElement("div", {
-            className: "mb-6 flex flex-wrap items-end justify-between gap-3 px-2"
+            className: "visual-section-header"
           }, React.createElement("div", null, React.createElement("h4", {
-            className: "text-[16px] font-extrabold text-slate-900"
-          }, "HTML \u6210\u54C1\u5361"), React.createElement("p", {
-            className: "mt-1 text-[12px] leading-relaxed text-slate-500"
-          }, "\u6587\u5B57\u7531\u7F51\u9875\u7CBE\u786E\u6392\u7248\uFF0CAI \u56FE\u7247\u4F5C\u4E3A\u4E3B\u89C6\u89C9\uFF1B\u5BFC\u51FA\u5C3A\u5BF8\u56FA\u5B9A\u4E3A 1080\xD71440\u3002")), React.createElement("span", {
+            className: "visual-section-title"
+          }, "\u5F53\u524D\u9875 HTML \u6210\u54C1\u5361"), React.createElement("p", {
+            className: "visual-section-description"
+          }, "\u8DDF\u968F\u4E0A\u65B9\u9875\u7B7E\u5207\u6362\uFF0C\u53EA\u5C55\u793A\u5F53\u524D\u9875\uFF0C\u56FA\u5B9A\u5BFC\u51FA 1080\xD71440\u3002")), React.createElement("span", {
             className: "visual-card-count"
-          }, "\u5171 ", htmlCards.length, " \u5F20")), React.createElement("style", null, HTML_CARD_EXPORT_STYLES), React.createElement("div", {
-            className: "visual-card-grid"
-          }, htmlCards.map(function (card) {
-            var imageResult = imageResults["visual-only:".concat(card.imageKey)];
-            var legacyVisualResult = imageResults["visual:".concat(card.imageKey)];
-            return React.createElement("div", {
-              key: card.id,
-              className: "visual-output-card"
-            }, React.createElement("div", {
-              className: "visual-output-card-header"
-            }, React.createElement("span", {
-              className: "text-[13px] font-bold text-slate-800"
-            }, card.label), React.createElement("button", {
-              onClick: function onClick() {
-                return exportHtmlCard(card);
-              },
-              disabled: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) !== 'success',
-              title: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'success' ? '导出 HTML 成品卡 PNG' : '请先生成无字主视觉',
-              className: "visual-button flex items-center justify-center"
-            }, React.createElement(Icon, {
-              name: "Download",
-              className: "mr-1.5 h-3.5 w-3.5"
-            }), " \u5BFC\u51FA PNG")), React.createElement("div", {
-              className: "html-card-preview-frame"
-            }, React.createElement("div", {
-              className: "html-card-preview-scale"
-            }, React.createElement(HtmlCard, {
-              card: card,
-              imageUrl: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'success' ? imageResult.imageUrl : '',
-              cardRef: function cardRef(node) {
-                if (node) htmlCardRefs.current[card.id] = node;
-              }
-            }))), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) !== 'success' && React.createElement("p", {
-              className: "mt-3 text-center text-[11px] ".concat((legacyVisualResult === null || legacyVisualResult === void 0 ? void 0 : legacyVisualResult.status) === 'success' ? 'text-amber-600' : 'text-slate-400')
-            }, (legacyVisualResult === null || legacyVisualResult === void 0 ? void 0 : legacyVisualResult.status) === 'success' ? '旧版主视觉不再用于 HTML 成品卡，请重新生成无字主视觉。' : '当前使用视觉占位，生成无字主视觉后会自动替换。'));
-          })), htmlCards.some(function (card) {
-            var _imageResults;
-            return ((_imageResults = imageResults["full:".concat(card.imageKey)]) === null || _imageResults === void 0 ? void 0 : _imageResults.status) === 'success';
-          }) && React.createElement("div", {
-            className: "mt-10 border-t border-indigo-100 pt-8"
-          }, React.createElement("h4", {
-            className: "mb-2 px-2 text-[16px] font-extrabold text-slate-900"
-          }, "HTML / AI \u6574\u56FE\u5BF9\u6BD4"), React.createElement("p", {
-            className: "mb-6 px-2 text-[12px] text-slate-500"
-          }, "\u5DE6\u4FA7\u4E3A HTML \u7CBE\u786E\u6392\u7248\uFF0C\u53F3\u4FA7\u4E3A\u56FE\u7247\u6A21\u578B\u76F4\u63A5\u6392\u7248\uFF0C\u4EC5\u7528\u4E8E\u89C6\u89C9\u6548\u679C\u6BD4\u8F83\u3002"), React.createElement("div", {
-            className: "space-y-8"
-          }, htmlCards.filter(function (card) {
-            var _imageResults2;
-            return ((_imageResults2 = imageResults["full:".concat(card.imageKey)]) === null || _imageResults2 === void 0 ? void 0 : _imageResults2.status) === 'success' && !hiddenFullImages[card.imageKey];
-          }).map(function (card) {
-            var _imageResults3;
-            return React.createElement("div", {
-              key: "compare-".concat(card.id),
-              className: "rounded-2xl border border-indigo-100 bg-white p-4 shadow-sm"
-            }, React.createElement("div", {
-              className: "mb-4 text-[13px] font-bold text-slate-800"
-            }, card.label), React.createElement("div", {
-              className: "grid grid-cols-1 md:grid-cols-2 gap-4"
-            }, React.createElement("div", null, React.createElement("div", {
-              className: "mb-2 text-[11px] font-bold text-slate-500"
-            }, "HTML \u6210\u54C1"), React.createElement("div", {
-              className: "html-card-preview-frame"
-            }, React.createElement("div", {
-              className: "html-card-preview-scale"
-            }, React.createElement(HtmlCard, {
-              card: card,
-              imageUrl: ((_imageResults3 = imageResults["visual-only:".concat(card.imageKey)]) === null || _imageResults3 === void 0 ? void 0 : _imageResults3.status) === 'success' ? imageResults["visual-only:".concat(card.imageKey)].imageUrl : ''
-            })))), React.createElement("div", null, React.createElement("div", {
-              className: "mb-2 text-[11px] font-bold text-indigo-600"
-            }, "AI \u6574\u56FE"), React.createElement("div", {
-              className: "overflow-hidden rounded-xl border border-indigo-100 bg-white"
-            }, React.createElement("img", {
-              src: imageResults["full:".concat(card.imageKey)].imageUrl,
-              alt: "".concat(card.label, " AI \u6574\u56FE\u5BF9\u6BD4"),
-              className: "block aspect-[2/3] w-full object-cover"
-            })))));
-          })))));
+          }, selectedPromptIndex + 1, " / ", htmlCards.length)), React.createElement("style", null, HTML_CARD_EXPORT_STYLES), React.createElement("div", {
+            className: "visual-panel visual-output-panel"
+          }, selectedHtmlCard && React.createElement("div", {
+            className: "visual-output-card"
+          }, React.createElement("div", {
+            className: "visual-current-output-header"
+          }, React.createElement("span", {
+            className: "text-[13px] font-bold text-slate-800"
+          }, selectedHtmlCard.label), React.createElement("button", {
+            onClick: function onClick() {
+              return exportHtmlCard(selectedHtmlCard);
+            },
+            disabled: (selectedHtmlImageResult === null || selectedHtmlImageResult === void 0 ? void 0 : selectedHtmlImageResult.status) !== 'success',
+            title: (selectedHtmlImageResult === null || selectedHtmlImageResult === void 0 ? void 0 : selectedHtmlImageResult.status) === 'success' ? '导出 HTML 成品卡 PNG' : '请先生成无字主视觉',
+            className: "visual-button flex items-center justify-center"
+          }, React.createElement(Icon, {
+            name: "Download",
+            className: "mr-1.5 h-3.5 w-3.5"
+          }), " \u5BFC\u51FA PNG")), React.createElement("div", {
+            className: "visual-current-output-body ".concat((fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'success' && !hiddenFullImages[selectedPromptSection.title] ? 'visual-current-output-body-with-compare' : '')
+          }, React.createElement("div", {
+            className: "visual-comparison-item"
+          }, (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'success' && !hiddenFullImages[selectedPromptSection.title] && React.createElement("div", {
+            className: "visual-comparison-label"
+          }, "HTML \u6210\u54C1"), React.createElement("div", {
+            className: "html-card-preview-frame"
+          }, React.createElement("div", {
+            className: "html-card-preview-scale"
+          }, React.createElement(HtmlCard, {
+            card: selectedHtmlCard,
+            imageUrl: (selectedHtmlImageResult === null || selectedHtmlImageResult === void 0 ? void 0 : selectedHtmlImageResult.status) === 'success' ? selectedHtmlImageResult.imageUrl : '',
+            cardRef: function cardRef(node) {
+              if (node) htmlCardRefs.current[selectedHtmlCard.id] = node;
+            }
+          }))), (selectedHtmlImageResult === null || selectedHtmlImageResult === void 0 ? void 0 : selectedHtmlImageResult.status) !== 'success' && React.createElement("p", {
+            className: "mt-3 text-center text-[11px] ".concat((selectedHtmlLegacyResult === null || selectedHtmlLegacyResult === void 0 ? void 0 : selectedHtmlLegacyResult.status) === 'success' ? 'text-amber-600' : 'text-slate-400')
+          }, (selectedHtmlLegacyResult === null || selectedHtmlLegacyResult === void 0 ? void 0 : selectedHtmlLegacyResult.status) === 'success' ? '旧版主视觉不再用于 HTML 成品卡，请重新生成无字主视觉。' : '当前使用视觉占位，生成无字主视觉后会自动替换。')), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'success' && !hiddenFullImages[selectedPromptSection.title] && React.createElement("div", {
+            className: "visual-comparison-item"
+          }, React.createElement("div", {
+            className: "visual-comparison-label"
+          }, "AI \u6574\u56FE"), React.createElement("div", {
+            className: "overflow-hidden rounded-xl border border-slate-200 bg-white"
+          }, React.createElement("img", {
+            src: fullImageResult.imageUrl,
+            alt: "".concat(selectedHtmlCard.label, " AI \u6574\u56FE\u5BF9\u6BD4"),
+            className: "block aspect-[3/4] w-full object-cover"
+          }))))))));
         }
         var fullCleanText = content.replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim();
         return React.createElement("div", {
@@ -2456,7 +2617,7 @@ function App() {
   })))), showResults && React.createElement("div", {
     className: "w-full pl-8 pr-[calc(2rem+5px)] md:pl-12 md:pr-[calc(3rem+5px)] pt-8 pb-4 z-20 shrink-0 relative animate-fade-in-down"
   }, React.createElement("div", {
-    className: "max-w-3xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-6"
+    className: "".concat(activeStageTab === 'step3' ? 'max-w-[1120px]' : 'max-w-3xl', " mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-6")
   }, React.createElement("div", {
     className: "results-stage-nav hide-scrollbar"
   }, NEW_STAGES.map(function (stage) {
@@ -2486,7 +2647,7 @@ function App() {
     ref: resultScrollRef,
     className: "flex-1 px-8 md:px-12 pb-10 custom-scrollbar relative z-10 transform-gpu ".concat(showResults ? 'overflow-y-scroll pt-2' : 'overflow-y-auto pt-8')
   }, React.createElement("div", {
-    className: "max-w-3xl mx-auto h-full"
+    className: "".concat(showResults && activeStageTab === 'step3' ? 'max-w-[1120px]' : 'max-w-3xl', " mx-auto h-full")
   }, !isProcessing && !showResults && React.createElement("div", {
     className: "h-full flex flex-col items-center justify-center animate-fade-in -mt-10"
   }, React.createElement("div", {
@@ -2628,7 +2789,28 @@ function App() {
     className: "config-field"
   }, React.createElement("label", {
     className: "config-label"
-  }, "\u6A21\u578B\u540D\u79F0 (Model)"), React.createElement("input", {
+  }, "\u6A21\u578B\u540D\u79F0 (Model)"), textModels.length > 0 ? React.createElement("div", {
+    className: "config-select-shell"
+  }, React.createElement("select", {
+    value: apiConfig.model,
+    onChange: function onChange(e) {
+      return handleModelSelection('text', e.target.value);
+    },
+    "aria-label": "\u9009\u62E9\u6587\u672C\u6A21\u578B",
+    className: "config-input config-model-select"
+  }, apiConfig.model && !textModels.includes(apiConfig.model) && React.createElement("option", {
+    value: apiConfig.model
+  }, apiConfig.model), textModels.map(function (model) {
+    return React.createElement("option", {
+      key: model,
+      value: model
+    }, model);
+  }), React.createElement("option", {
+    value: "__manual__"
+  }, "\u624B\u52A8\u586B\u5199...")), React.createElement(Icon, {
+    name: "ChevronDown",
+    className: "config-select-icon"
+  })) : React.createElement("input", {
     type: "text",
     value: apiConfig.model,
     onChange: function onChange(e) {
@@ -2636,16 +2818,8 @@ function App() {
         model: e.target.value
       }));
     },
-    list: "text-model-options",
     className: "config-input placeholder-slate-400"
-  }), React.createElement("datalist", {
-    id: "text-model-options"
-  }, textModels.map(function (model) {
-    return React.createElement("option", {
-      key: model,
-      value: model
-    });
-  }))), React.createElement("div", {
+  })), React.createElement("div", {
     className: "config-field"
   }, React.createElement("label", {
     className: "config-label"
@@ -2676,14 +2850,7 @@ function App() {
     className: "config-section-description"
   }, "\u5B9A\u4E49\u5224\u578B\u3001\u91CD\u6784\u3001\u5361\u7247\u683C\u5F0F\u548C\u89C6\u89C9\u63D0\u793A\u8BCD\u89C4\u5219\u3002\u65E7\u914D\u7F6E\u4E0D\u4F1A\u968F\u7248\u672C\u81EA\u52A8\u8986\u76D6\u3002")), React.createElement("div", {
     className: "config-section-actions"
-  }, React.createElement("span", {
-    className: "relative inline-flex items-center group"
   }, React.createElement("button", {
-    type: "button",
-    "aria-label": "\u67E5\u770B\u63D0\u793A\u8BCD\u4F18\u5316\u5EFA\u8BAE",
-    title: "\u53EF\u4EE5\u5FAE\u8C03\u5185\u5BB9\u98CE\u683C\u3001\u5361\u7247\u6570\u91CF\u548C\u89C6\u89C9\u504F\u597D\uFF1B\u4E0D\u8981\u4FEE\u6539\u9636\u6BB51\u81F3\u9636\u6BB56\u3001\u5361\u7247\u6807\u9898\u548C\u5C01\u9762/\u6B63\u6587/\u5C01\u5E95\u6807\u7B7E\u3002\u6539\u574F\u540E\u53EF\u6062\u590D\u9ED8\u8BA4\u6307\u4EE4\u3002",
-    className: "w-4 h-4 rounded-full text-[10px] font-bold text-slate-400 border border-slate-300 hover:text-indigo-600 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
-  }, "i")), React.createElement("button", {
     type: "button",
     onClick: handleRestoreDefaultPrompt,
     className: "config-action-button"
@@ -2753,7 +2920,28 @@ function App() {
     className: "config-field"
   }, React.createElement("label", {
     className: "config-label"
-  }, "\u56FE\u7247\u6A21\u578B"), React.createElement("input", {
+  }, "\u56FE\u7247\u6A21\u578B"), imageModels.length > 0 ? React.createElement("div", {
+    className: "config-select-shell"
+  }, React.createElement("select", {
+    value: apiConfig.imageModel,
+    onChange: function onChange(e) {
+      return handleModelSelection('image', e.target.value);
+    },
+    "aria-label": "\u9009\u62E9\u56FE\u7247\u6A21\u578B",
+    className: "config-input config-model-select"
+  }, apiConfig.imageModel && !imageModels.includes(apiConfig.imageModel) && React.createElement("option", {
+    value: apiConfig.imageModel
+  }, apiConfig.imageModel), imageModels.map(function (model) {
+    return React.createElement("option", {
+      key: model,
+      value: model
+    }, model);
+  }), React.createElement("option", {
+    value: "__manual__"
+  }, "\u624B\u52A8\u586B\u5199...")), React.createElement(Icon, {
+    name: "ChevronDown",
+    className: "config-select-icon"
+  })) : React.createElement("input", {
     type: "text",
     value: apiConfig.imageModel,
     onChange: function onChange(e) {
@@ -2761,17 +2949,9 @@ function App() {
         imageModel: e.target.value
       }));
     },
-    list: "image-model-options",
     placeholder: "gpt-image-1",
     className: "config-input"
-  }), React.createElement("datalist", {
-    id: "image-model-options"
-  }, imageModels.map(function (model) {
-    return React.createElement("option", {
-      key: model,
-      value: model
-    });
-  }))), React.createElement("div", {
+  })), React.createElement("div", {
     className: "config-field"
   }, React.createElement("label", {
     className: "config-label"
@@ -2801,7 +2981,23 @@ function App() {
     className: "config-input"
   }))), React.createElement(ConfigStatus, {
     state: configTools.imageModels
-  }))), React.createElement("div", {
+  })), React.createElement("section", {
+    className: "config-section"
+  }, React.createElement("details", {
+    className: "image-diagnostic"
+  }, React.createElement("summary", null, "\u6700\u8FD1\u4E00\u6B21\u751F\u56FE\u8BCA\u65AD", React.createElement("span", null, lastImageDiagnostic !== null && lastImageDiagnostic !== void 0 && lastImageDiagnostic.updatedAt ? new Date(lastImageDiagnostic.updatedAt).toLocaleString() : '暂无记录')), lastImageDiagnostic ? React.createElement("dl", {
+    className: "image-diagnostic-grid"
+  }, [['请求方式', lastImageDiagnostic.requestMode], ['请求接口', lastImageDiagnostic.endpointPath], ['请求格式', lastImageDiagnostic.requestedFormat], ['实际返回', lastImageDiagnostic.actualFormat], ['图片来源', lastImageDiagnostic.imageHost], ['保存方式', lastImageDiagnostic.storageBackend], ['保存结果', lastImageDiagnostic.storageStatus], ['刷新恢复', lastImageDiagnostic.restoreStatus], ['失败原因', lastImageDiagnostic.failureReason || '无']].map(function (_ref6) {
+    var _ref7 = _slicedToArray(_ref6, 2),
+      label = _ref7[0],
+      value = _ref7[1];
+    return React.createElement("div", {
+      className: "image-diagnostic-item",
+      key: label
+    }, React.createElement("dt", null, label), React.createElement("dd", null, value || '未记录'));
+  })) : React.createElement("p", {
+    className: "image-diagnostic-empty"
+  }, "\u5B8C\u6210\u4E00\u6B21\u751F\u56FE\u540E\uFF0C\u8FD9\u91CC\u4F1A\u663E\u793A\u8131\u654F\u540E\u7684\u8BF7\u6C42\u4E0E\u4FDD\u5B58\u7ED3\u679C\u3002")))), React.createElement("div", {
     className: "config-dialog-footer"
   }, React.createElement("button", {
     onClick: handleSaveConfig,

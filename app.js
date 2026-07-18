@@ -1161,6 +1161,26 @@ var hasSavedApiConfig = function hasSavedApiConfig() {
     return false;
   }
 };
+var html2CanvasLoader = null;
+var loadHtml2Canvas = function loadHtml2Canvas() {
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  if (html2CanvasLoader) return html2CanvasLoader;
+  html2CanvasLoader = new Promise(function (resolve, reject) {
+    var script = document.createElement('script');
+    script.src = 'vendor/html2canvas.js';
+    script.onload = function () {
+      return window.html2canvas ? resolve(window.html2canvas) : reject(new Error('导出组件加载失败'));
+    };
+    script.onerror = function () {
+      return reject(new Error('导出组件加载失败'));
+    };
+    document.head.appendChild(script);
+  })["catch"](function (error) {
+    html2CanvasLoader = null;
+    throw error;
+  });
+  return html2CanvasLoader;
+};
 function App() {
   var _useState3 = useState({
       apiUrl: 'https://api.deepseek.com/v1/chat/completions',
@@ -1944,11 +1964,8 @@ function App() {
             return _context12.a(2);
           case 2:
             _context12.p = 2;
-            if (window.html2canvas) {
-              _context12.n = 3;
-              break;
-            }
-            throw new Error('本地导出组件未加载');
+            _context12.n = 3;
+            return loadHtml2Canvas();
           case 3:
             if (!((_document$fonts = document.fonts) !== null && _document$fonts !== void 0 && _document$fonts.ready)) {
               _context12.n = 4;

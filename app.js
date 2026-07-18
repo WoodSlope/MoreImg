@@ -781,6 +781,15 @@ var resolveApiEndpoint = function resolveApiEndpoint() {
 var getRequestTransport = function getRequestTransport(endpoint, kind) {
   var pageLocation = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : window.location;
   var isLocalService = (pageLocation === null || pageLocation === void 0 ? void 0 : pageLocation.protocol) === 'http:' && ['127.0.0.1', 'localhost'].includes(pageLocation === null || pageLocation === void 0 ? void 0 : pageLocation.hostname);
+  try {
+    var endpointUrl = new URL(endpoint, pageLocation.origin);
+    var isLoopbackEndpoint = ['127.0.0.1', 'localhost'].includes(endpointUrl.hostname);
+    if (!isLocalService && isLoopbackEndpoint) return {
+      url: endpoint,
+      headers: {},
+      blockedLocalService: true
+    };
+  } catch (_unused5) {}
   if (!isLocalService) return {
     url: endpoint,
     headers: {}
@@ -797,7 +806,7 @@ var getRequestTransport = function getRequestTransport(endpoint, kind) {
         'X-MoreImg-Upstream': target.toString()
       }
     };
-  } catch (_unused5) {
+  } catch (_unused6) {
     return {
       url: endpoint,
       headers: {}
@@ -1157,7 +1166,7 @@ var hasSavedApiConfig = function hasSavedApiConfig() {
     if (!savedConfig) return false;
     var parsedConfig = JSON.parse(savedConfig);
     return Boolean(parsedConfig.apiKey);
-  } catch (_unused6) {
+  } catch (_unused7) {
     return false;
   }
 };
@@ -1414,7 +1423,7 @@ function App() {
               try {
                 parsedHistory = JSON.parse(savedHistory);
                 if (isActive && Array.isArray(parsedHistory)) setHistory(parsedHistory);
-              } catch (_unused7) {
+              } catch (_unused8) {
                 localStorage.removeItem(HISTORY_INDEX_KEY);
               }
               return _context9.a(2);
@@ -2063,7 +2072,7 @@ function App() {
   var requestProcessingText = function requestProcessingText(messages, externalSignal) {
     return runWithRequestControl(function () {
       var _ref9 = _asyncToGenerator(_regenerator().m(function _callee13(signal) {
-        var fullResponseText, rawBuffer, isStreamedData, finishReason, endpoint, transport, response, errorMsg, _errorData$error, errorData, reader, decoder, streamBuffer, _yield$reader$read, done, value, dataStr, data, chunk, lines, _iterator2, _step2, _loop, _ret, _data2, parsed, _t9, _t0;
+        var fullResponseText, rawBuffer, isStreamedData, finishReason, endpoint, transport, response, errorMsg, _errorData$error, errorData, contentType, responseText, data, parsed, reader, decoder, streamBuffer, _yield$reader$read, done, value, dataStr, _data, chunk, lines, _iterator2, _step2, _loop, _ret, _data3, _parsed2, _t9, _t0;
         return _regenerator().w(function (_context14) {
           while (1) switch (_context14.p = _context14.n) {
             case 0:
@@ -2073,7 +2082,13 @@ function App() {
               finishReason = '';
               endpoint = resolveApiEndpoint(apiConfig.apiUrl, 'text');
               transport = getRequestTransport(endpoint, 'text');
-              _context14.n = 1;
+              if (!transport.blockedLocalService) {
+                _context14.n = 1;
+                break;
+              }
+              throw new Error('当前是线上页面，不能使用本机代理地址。请在设置中改为可跨域访问的 HTTPS 接口。');
+            case 1:
+              _context14.n = 2;
               return fetch(transport.url, {
                 method: 'POST',
                 headers: _objectSpread({
@@ -2083,57 +2098,99 @@ function App() {
                 body: JSON.stringify(buildProcessingRequestBody(endpoint, apiConfig.model.trim(), messages)),
                 signal: signal
               });
-            case 1:
+            case 2:
               response = _context14.v;
               if (response.ok) {
-                _context14.n = 6;
+                _context14.n = 7;
                 break;
               }
               errorMsg = response.statusText;
-              _context14.p = 2;
-              _context14.n = 3;
+              _context14.p = 3;
+              _context14.n = 4;
               return response.json();
-            case 3:
+            case 4:
               errorData = _context14.v;
               if ((_errorData$error = errorData.error) !== null && _errorData$error !== void 0 && _errorData$error.message) errorMsg = errorData.error.message;else if (errorData.message) errorMsg = errorData.message;
-              _context14.n = 5;
+              _context14.n = 6;
               break;
-            case 4:
-              _context14.p = 4;
-              _t9 = _context14.v;
             case 5:
-              throw new Error("(HTTP ".concat(response.status, ") ").concat(errorMsg));
+              _context14.p = 5;
+              _t9 = _context14.v;
             case 6:
-              reader = response.body.getReader();
-              decoder = new TextDecoder('utf-8');
-              streamBuffer = '';
+              throw new Error("(HTTP ".concat(response.status, ") ").concat(errorMsg));
             case 7:
-              if (!true) {
-                _context14.n = 18;
+              contentType = (response.headers.get('content-type') || '').toLowerCase();
+              if (contentType.includes('text/event-stream')) {
+                _context14.n = 10;
                 break;
               }
               _context14.n = 8;
-              return reader.read();
+              return response.text();
             case 8:
+              responseText = _context14.v;
+              rawBuffer = responseText;
+              try {
+                data = JSON.parse(responseText);
+                finishReason = extractProcessingFinishReason(data);
+                fullResponseText = extractProcessingResponseText(data);
+              } catch (e) {
+                fullResponseText = responseText;
+              }
+              parsed = parseStreamedText(fullResponseText);
+              setCurrentSession(function (prev) {
+                return _objectSpread(_objectSpread({}, prev), {}, {
+                  rawText: fullResponseText,
+                  stages: parsed.stages
+                });
+              });
+              setInternalStage(parsed.latestStage || 1);
+              if (fullResponseText.trim()) {
+                _context14.n = 9;
+                break;
+              }
+              throw new Error('大模型未返回任何有效内容，请检查接口配置或稍后重试。');
+            case 9:
+              return _context14.a(2, {
+                text: fullResponseText,
+                finishReason: finishReason
+              });
+            case 10:
+              if (!(!response.body || typeof response.body.getReader !== 'function')) {
+                _context14.n = 11;
+                break;
+              }
+              throw new Error('接口返回了不可读取的流，请关闭流式输出或更换接口。');
+            case 11:
+              reader = response.body.getReader();
+              decoder = new TextDecoder('utf-8');
+              streamBuffer = '';
+            case 12:
+              if (!true) {
+                _context14.n = 23;
+                break;
+              }
+              _context14.n = 13;
+              return reader.read();
+            case 13:
               _yield$reader$read = _context14.v;
               done = _yield$reader$read.done;
               value = _yield$reader$read.value;
               if (!done) {
-                _context14.n = 9;
+                _context14.n = 14;
                 break;
               }
               if (streamBuffer.trim().startsWith('data:')) {
                 try {
                   dataStr = streamBuffer.substring(5).trim();
                   if (dataStr !== '[DONE]') {
-                    data = JSON.parse(dataStr);
-                    finishReason = extractProcessingFinishReason(data) || finishReason;
-                    fullResponseText += extractProcessingStreamDelta(data);
+                    _data = JSON.parse(dataStr);
+                    finishReason = extractProcessingFinishReason(_data) || finishReason;
+                    fullResponseText += extractProcessingStreamDelta(_data);
                   }
                 } catch (e) {}
               }
-              return _context14.a(3, 18);
-            case 9:
+              return _context14.a(3, 23);
+            case 14:
               chunk = decoder.decode(value, {
                 stream: true
               });
@@ -2142,9 +2199,9 @@ function App() {
               lines = streamBuffer.split('\n');
               streamBuffer = lines.pop();
               _iterator2 = _createForOfIteratorHelper(lines);
-              _context14.p = 10;
+              _context14.p = 15;
               _loop = _regenerator().m(function _loop() {
-                var line, _dataStr, _data, delta, parsed, _t8;
+                var line, _dataStr, _data2, delta, _parsed, _t8;
                 return _regenerator().w(function (_context13) {
                   while (1) switch (_context13.p = _context13.n) {
                     case 0:
@@ -2169,19 +2226,19 @@ function App() {
                       }
                       return _context13.a(2, 0);
                     case 3:
-                      _data = JSON.parse(_dataStr);
-                      finishReason = extractProcessingFinishReason(_data) || finishReason;
-                      delta = extractProcessingStreamDelta(_data);
+                      _data2 = JSON.parse(_dataStr);
+                      finishReason = extractProcessingFinishReason(_data2) || finishReason;
+                      delta = extractProcessingStreamDelta(_data2);
                       if (delta) {
                         fullResponseText += delta;
-                        parsed = parseStreamedText(fullResponseText);
+                        _parsed = parseStreamedText(fullResponseText);
                         setCurrentSession(function (prev) {
                           return _objectSpread(_objectSpread({}, prev), {}, {
                             rawText: fullResponseText,
-                            stages: parsed.stages
+                            stages: _parsed.stages
                           });
                         });
-                        setInternalStage(parsed.latestStage || 1);
+                        setInternalStage(_parsed.latestStage || 1);
                       }
                       _context13.n = 5;
                       break;
@@ -2195,66 +2252,66 @@ function App() {
                 }, _loop, null, [[2, 4]]);
               });
               _iterator2.s();
-            case 11:
-              if ((_step2 = _iterator2.n()).done) {
-                _context14.n = 14;
-                break;
-              }
-              return _context14.d(_regeneratorValues(_loop()), 12);
-            case 12:
-              _ret = _context14.v;
-              if (!(_ret === 0)) {
-                _context14.n = 13;
-                break;
-              }
-              return _context14.a(3, 13);
-            case 13:
-              _context14.n = 11;
-              break;
-            case 14:
-              _context14.n = 16;
-              break;
-            case 15:
-              _context14.p = 15;
-              _t0 = _context14.v;
-              _iterator2.e(_t0);
             case 16:
-              _context14.p = 16;
-              _iterator2.f();
-              return _context14.f(16);
-            case 17:
-              _context14.n = 7;
-              break;
-            case 18:
-              if (!isStreamedData && rawBuffer.trim()) {
-                try {
-                  _data2 = JSON.parse(rawBuffer);
-                  finishReason = extractProcessingFinishReason(_data2);
-                  fullResponseText = extractProcessingResponseText(_data2);
-                } catch (e) {
-                  fullResponseText = '## 接口返回格式异常\n\n大模型接口返回了非标准的文本结构。\n\n' + rawBuffer;
-                }
-                parsed = parseStreamedText(fullResponseText);
-                setCurrentSession(function (prev) {
-                  return _objectSpread(_objectSpread({}, prev), {}, {
-                    rawText: fullResponseText,
-                    stages: parsed.stages
-                  });
-                });
-                setInternalStage(parsed.latestStage || 1);
-              }
-              if (fullResponseText.trim()) {
+              if ((_step2 = _iterator2.n()).done) {
                 _context14.n = 19;
                 break;
               }
-              throw new Error('大模型未返回任何有效内容，请检查接口配置或稍后重试。');
+              return _context14.d(_regeneratorValues(_loop()), 17);
+            case 17:
+              _ret = _context14.v;
+              if (!(_ret === 0)) {
+                _context14.n = 18;
+                break;
+              }
+              return _context14.a(3, 18);
+            case 18:
+              _context14.n = 16;
+              break;
             case 19:
+              _context14.n = 21;
+              break;
+            case 20:
+              _context14.p = 20;
+              _t0 = _context14.v;
+              _iterator2.e(_t0);
+            case 21:
+              _context14.p = 21;
+              _iterator2.f();
+              return _context14.f(21);
+            case 22:
+              _context14.n = 12;
+              break;
+            case 23:
+              if (!isStreamedData && rawBuffer.trim()) {
+                try {
+                  _data3 = JSON.parse(rawBuffer);
+                  finishReason = extractProcessingFinishReason(_data3);
+                  fullResponseText = extractProcessingResponseText(_data3);
+                } catch (e) {
+                  fullResponseText = '## 接口返回格式异常\n\n大模型接口返回了非标准的文本结构。\n\n' + rawBuffer;
+                }
+                _parsed2 = parseStreamedText(fullResponseText);
+                setCurrentSession(function (prev) {
+                  return _objectSpread(_objectSpread({}, prev), {}, {
+                    rawText: fullResponseText,
+                    stages: _parsed2.stages
+                  });
+                });
+                setInternalStage(_parsed2.latestStage || 1);
+              }
+              if (fullResponseText.trim()) {
+                _context14.n = 24;
+                break;
+              }
+              throw new Error('大模型未返回任何有效内容，请检查接口配置或稍后重试。');
+            case 24:
               return _context14.a(2, {
                 text: fullResponseText,
                 finishReason: finishReason
               });
           }
-        }, _callee13, null, [[10, 15, 16, 17], [2, 4]]);
+        }, _callee13, null, [[15, 20, 21, 22], [3, 5]]);
       }));
       return function (_x14) {
         return _ref9.apply(this, arguments);
@@ -3125,7 +3182,7 @@ function App() {
   })), React.createElement("button", {
     onClick: isProcessing ? handleStopProcessing : handleStartProcessing,
     disabled: isButtonDisabled,
-    className: "w-full h-12 shrink-0 rounded-xl font-bold text-[14px] flex items-center justify-center transition-all duration-300 relative overflow-hidden z-10 backdrop-blur-sm\n                ".concat(isButtonDisabled ? 'bg-white/50 text-slate-400 cursor-not-allowed border border-white/60 shadow-none' : isProcessing ? 'bg-amber-500/90 hover:bg-amber-500 text-white shadow-md hover:shadow-lg border border-amber-400/60' : 'bg-indigo-600/90 hover:bg-indigo-600 text-white shadow-md hover:shadow-lg transform hover:-translate-y-0.5 border border-indigo-500/50')
+    className: "processing-action-button w-full h-12 shrink-0 rounded-xl font-bold text-[14px] flex items-center justify-center transition-all duration-300 relative overflow-hidden z-10 backdrop-blur-sm\n                ".concat(isButtonDisabled ? 'is-disabled' : isProcessing ? 'is-running' : 'is-ready')
   }, isProcessing ? React.createElement(React.Fragment, null, React.createElement(Icon, {
     name: "Square",
     className: "w-4 h-4 mr-2 text-white",

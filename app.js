@@ -502,6 +502,14 @@ var NEW_STAGES = [{
   icon: 'Image',
   subStages: [5]
 }];
+var STAGE_LOADING_TEXT = {
+  1: "正在注入原料，执行 AI 准入判型...",
+  2: "引擎运转：全网事实核查与结构拆解中...",
+  3: "逻辑精装中，正在重构文章框架...",
+  4: "正在切片：模块化封装知识卡片包...",
+  5: "视觉中枢唤醒：渲染生产级中文提示词...",
+  6: "最终质量验收，校验卡片与指令匹配度..."
+};
 var parseStreamedText = function parseStreamedText(fullText) {
   var stages = {
     1: '',
@@ -1326,6 +1334,18 @@ function App() {
     if (!showResults || !resultScrollRef.current) return;
     resultScrollRef.current.scrollTop = 0;
   }, [activeStageTab, activeHistoryId, showResults]);
+  useEffect(function () {
+    if (!isProcessing || showResults) return;
+    setInternalStage(1);
+    var timer = setInterval(function () {
+      return setInternalStage(function (stage) {
+        return Math.min(stage + 1, 5);
+      });
+    }, 7000);
+    return function () {
+      return clearInterval(timer);
+    };
+  }, [isProcessing, showResults]);
   var replaceImageResults = function replaceImageResults(nextResults) {
     imageObjectUrlsRef.current.forEach(function (url) {
       return URL.revokeObjectURL(url);
@@ -3072,17 +3092,20 @@ function App() {
   }), React.createElement("div", {
     className: "relative z-10 bg-white/90 shadow-xl rounded-2xl w-16 h-16 flex items-center justify-center border border-white/80 backdrop-blur-md"
   }, React.createElement(Icon, {
-    name: "Database",
+    name: internalStage >= 5 ? "Image" : internalStage >= 3 ? "Cpu" : "Database",
     className: "w-8 h-8 text-indigo-600 animate-pulse-slow",
     strokeWidth: 1.5
   }))), React.createElement("div", {
     className: "text-center space-y-3"
   }, React.createElement("h3", {
-    className: "text-[18px] font-extrabold text-slate-800 tracking-tight"
-  }, "AI \u6B63\u5728\u5904\u7406\u5B8C\u6574\u7269\u6599\u5305..."), React.createElement("div", {
+    className: "text-[18px] font-extrabold text-slate-800 tracking-tight transition-all duration-300"
+  }, STAGE_LOADING_TEXT[internalStage] || "连接核心计算引擎..."), React.createElement("div", {
     className: "w-64 h-1.5 bg-slate-200/50 rounded-full overflow-hidden mx-auto mt-6 backdrop-blur-sm"
   }, React.createElement("div", {
-    className: "processing-wait-bar h-full bg-gradient-to-r from-indigo-500 to-sky-400"
+    className: "h-full bg-gradient-to-r from-indigo-500 to-sky-400 transition-all duration-500 ease-out",
+    style: {
+      width: "".concat(internalStage / 6 * 100, "%")
+    }
   })))), showResults && React.createElement("div", {
     className: "w-full pl-8 pr-[calc(2rem+5px)] md:pl-12 md:pr-[calc(3rem+5px)] pt-8 pb-4 z-20 shrink-0 relative animate-fade-in-down"
   }, React.createElement("div", {

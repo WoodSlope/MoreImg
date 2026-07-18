@@ -1,6 +1,5 @@
 var _excluded = ["name", "className", "strokeWidth", "fill"];
 var _templateObject;
-function _regeneratorValues(e) { if (null != e) { var t = e["function" == typeof Symbol && Symbol.iterator || "@@iterator"], r = 0; if (t) return t.call(e); if ("function" == typeof e.next) return e; if (!isNaN(e.length)) return { next: function next() { return e && r >= e.length && (e = void 0), { value: e && e[r++], done: !e }; } }; } throw new TypeError(_typeof(e) + " is not iterable"); }
 function _createForOfIteratorHelper(r, e) { var t = "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (!t) { if (Array.isArray(r) || (t = _unsupportedIterableToArray(r)) || e && r && "number" == typeof r.length) { t && (r = t); var _n = 0, F = function F() {}; return { s: F, n: function n() { return _n >= r.length ? { done: !0 } : { done: !1, value: r[_n++] }; }, e: function e(r) { throw r; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var o, a = !0, u = !1; return { s: function s() { t = t.call(r); }, n: function n() { var r = t.next(); return a = r.done, r; }, e: function e(r) { u = !0, o = r; }, f: function f() { try { a || null == t["return"] || t["return"](); } finally { if (u) throw o; } } }; }
 function _toConsumableArray(r) { return _arrayWithoutHoles(r) || _iterableToArray(r) || _unsupportedIterableToArray(r) || _nonIterableSpread(); }
 function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
@@ -503,14 +502,6 @@ var NEW_STAGES = [{
   icon: 'Image',
   subStages: [5]
 }];
-var STAGE_LOADING_TEXT = {
-  1: "正在注入原料，执行 AI 准入判型...",
-  2: "引擎运转：全网事实核查与结构拆解中...",
-  3: "逻辑精装中，正在重构文章框架...",
-  4: "正在切片：模块化封装知识卡片包...",
-  5: "视觉中枢唤醒：渲染生产级中文提示词...",
-  6: "最终质量验收，校验卡片与指令匹配度..."
-};
 var parseStreamedText = function parseStreamedText(fullText) {
   var stages = {
     1: '',
@@ -898,18 +889,10 @@ var extractProcessingResponseText = function extractProcessingResponseText() {
     return (content === null || content === void 0 || (_content$text = content.text) === null || _content$text === void 0 ? void 0 : _content$text.value) || (content === null || content === void 0 ? void 0 : content.text) || '';
   }).filter(Boolean).join('');
 };
-var extractProcessingStreamDelta = function extractProcessingStreamDelta() {
-  var _data$choices3;
-  var data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
-  var chatDelta = (_data$choices3 = data.choices) === null || _data$choices3 === void 0 || (_data$choices3 = _data$choices3[0]) === null || _data$choices3 === void 0 || (_data$choices3 = _data$choices3.delta) === null || _data$choices3 === void 0 ? void 0 : _data$choices3.content;
-  if (typeof chatDelta === 'string') return chatDelta;
-  if (data.type === 'response.output_text.delta' && typeof data.delta === 'string') return data.delta;
-  return '';
-};
 var extractProcessingFinishReason = function extractProcessingFinishReason() {
-  var _data$choices4, _responseData$incompl;
+  var _data$choices3, _responseData$incompl;
   var data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
-  var chatReason = (_data$choices4 = data.choices) === null || _data$choices4 === void 0 || (_data$choices4 = _data$choices4[0]) === null || _data$choices4 === void 0 ? void 0 : _data$choices4.finish_reason;
+  var chatReason = (_data$choices3 = data.choices) === null || _data$choices3 === void 0 || (_data$choices3 = _data$choices3[0]) === null || _data$choices3 === void 0 ? void 0 : _data$choices3.finish_reason;
   if (chatReason) return chatReason;
   var responseData = data.response || data;
   if ((_responseData$incompl = responseData.incomplete_details) !== null && _responseData$incompl !== void 0 && _responseData$incompl.reason) return responseData.incomplete_details.reason;
@@ -2072,63 +2055,47 @@ function App() {
   var requestProcessingText = function requestProcessingText(messages, externalSignal) {
     return runWithRequestControl(function () {
       var _ref9 = _asyncToGenerator(_regenerator().m(function _callee13(signal) {
-        var fullResponseText, rawBuffer, isStreamedData, finishReason, endpoint, transport, response, errorMsg, _errorData$error, errorData, contentType, responseText, data, parsed, reader, decoder, streamBuffer, _yield$reader$read, done, value, dataStr, _data, chunk, lines, _iterator2, _step2, _loop, _ret, _data3, _parsed2, _t9, _t0;
-        return _regenerator().w(function (_context14) {
-          while (1) switch (_context14.p = _context14.n) {
+        var fullResponseText, finishReason, endpoint, transport, response, responseText, errorMsg, _errorData$error, errorData, data, parsed;
+        return _regenerator().w(function (_context13) {
+          while (1) switch (_context13.n) {
             case 0:
               fullResponseText = '';
-              rawBuffer = '';
-              isStreamedData = false;
               finishReason = '';
               endpoint = resolveApiEndpoint(apiConfig.apiUrl, 'text');
               transport = getRequestTransport(endpoint, 'text');
               if (!transport.blockedLocalService) {
-                _context14.n = 1;
+                _context13.n = 1;
                 break;
               }
               throw new Error('当前是线上页面，不能使用本机代理地址。请在设置中改为可跨域访问的 HTTPS 接口。');
             case 1:
-              _context14.n = 2;
+              _context13.n = 2;
               return fetch(transport.url, {
                 method: 'POST',
                 headers: _objectSpread({
                   'Content-Type': 'application/json',
                   'Authorization': "Bearer ".concat(apiConfig.apiKey.trim())
                 }, transport.headers),
-                body: JSON.stringify(buildProcessingRequestBody(endpoint, apiConfig.model.trim(), messages)),
+                body: JSON.stringify(buildProcessingRequestBody(endpoint, apiConfig.model.trim(), messages, PROCESSING_MAX_OUTPUT_TOKENS, false)),
                 signal: signal
               });
             case 2:
-              response = _context14.v;
+              response = _context13.v;
+              _context13.n = 3;
+              return response.text();
+            case 3:
+              responseText = _context13.v;
               if (response.ok) {
-                _context14.n = 7;
+                _context13.n = 4;
                 break;
               }
               errorMsg = response.statusText;
-              _context14.p = 3;
-              _context14.n = 4;
-              return response.json();
-            case 4:
-              errorData = _context14.v;
-              if ((_errorData$error = errorData.error) !== null && _errorData$error !== void 0 && _errorData$error.message) errorMsg = errorData.error.message;else if (errorData.message) errorMsg = errorData.message;
-              _context14.n = 6;
-              break;
-            case 5:
-              _context14.p = 5;
-              _t9 = _context14.v;
-            case 6:
+              try {
+                errorData = JSON.parse(responseText);
+                if ((_errorData$error = errorData.error) !== null && _errorData$error !== void 0 && _errorData$error.message) errorMsg = errorData.error.message;else if (errorData.message) errorMsg = errorData.message;
+              } catch (e) {}
               throw new Error("(HTTP ".concat(response.status, ") ").concat(errorMsg));
-            case 7:
-              contentType = (response.headers.get('content-type') || '').toLowerCase();
-              if (contentType.includes('text/event-stream')) {
-                _context14.n = 10;
-                break;
-              }
-              _context14.n = 8;
-              return response.text();
-            case 8:
-              responseText = _context14.v;
-              rawBuffer = responseText;
+            case 4:
               try {
                 data = JSON.parse(responseText);
                 finishReason = extractProcessingFinishReason(data);
@@ -2136,6 +2103,12 @@ function App() {
               } catch (e) {
                 fullResponseText = responseText;
               }
+              if (fullResponseText.trim()) {
+                _context13.n = 5;
+                break;
+              }
+              throw new Error('大模型未返回任何有效内容，请检查接口配置或稍后重试。');
+            case 5:
               parsed = parseStreamedText(fullResponseText);
               setCurrentSession(function (prev) {
                 return _objectSpread(_objectSpread({}, prev), {}, {
@@ -2144,174 +2117,12 @@ function App() {
                 });
               });
               setInternalStage(parsed.latestStage || 1);
-              if (fullResponseText.trim()) {
-                _context14.n = 9;
-                break;
-              }
-              throw new Error('大模型未返回任何有效内容，请检查接口配置或稍后重试。');
-            case 9:
-              return _context14.a(2, {
-                text: fullResponseText,
-                finishReason: finishReason
-              });
-            case 10:
-              if (!(!response.body || typeof response.body.getReader !== 'function')) {
-                _context14.n = 11;
-                break;
-              }
-              throw new Error('接口返回了不可读取的流，请关闭流式输出或更换接口。');
-            case 11:
-              reader = response.body.getReader();
-              decoder = new TextDecoder('utf-8');
-              streamBuffer = '';
-            case 12:
-              if (!true) {
-                _context14.n = 23;
-                break;
-              }
-              _context14.n = 13;
-              return reader.read();
-            case 13:
-              _yield$reader$read = _context14.v;
-              done = _yield$reader$read.done;
-              value = _yield$reader$read.value;
-              if (!done) {
-                _context14.n = 14;
-                break;
-              }
-              if (streamBuffer.trim().startsWith('data:')) {
-                try {
-                  dataStr = streamBuffer.substring(5).trim();
-                  if (dataStr !== '[DONE]') {
-                    _data = JSON.parse(dataStr);
-                    finishReason = extractProcessingFinishReason(_data) || finishReason;
-                    fullResponseText += extractProcessingStreamDelta(_data);
-                  }
-                } catch (e) {}
-              }
-              return _context14.a(3, 23);
-            case 14:
-              chunk = decoder.decode(value, {
-                stream: true
-              });
-              rawBuffer += chunk;
-              streamBuffer += chunk;
-              lines = streamBuffer.split('\n');
-              streamBuffer = lines.pop();
-              _iterator2 = _createForOfIteratorHelper(lines);
-              _context14.p = 15;
-              _loop = _regenerator().m(function _loop() {
-                var line, _dataStr, _data2, delta, _parsed, _t8;
-                return _regenerator().w(function (_context13) {
-                  while (1) switch (_context13.p = _context13.n) {
-                    case 0:
-                      line = _step2.value;
-                      line = line.trim();
-                      if (!(!line || line === 'data: [DONE]')) {
-                        _context13.n = 1;
-                        break;
-                      }
-                      return _context13.a(2, 0);
-                    case 1:
-                      if (!line.startsWith('data:')) {
-                        _context13.n = 5;
-                        break;
-                      }
-                      isStreamedData = true;
-                      _context13.p = 2;
-                      _dataStr = line.substring(5).trim();
-                      if (!(_dataStr === '[DONE]')) {
-                        _context13.n = 3;
-                        break;
-                      }
-                      return _context13.a(2, 0);
-                    case 3:
-                      _data2 = JSON.parse(_dataStr);
-                      finishReason = extractProcessingFinishReason(_data2) || finishReason;
-                      delta = extractProcessingStreamDelta(_data2);
-                      if (delta) {
-                        fullResponseText += delta;
-                        _parsed = parseStreamedText(fullResponseText);
-                        setCurrentSession(function (prev) {
-                          return _objectSpread(_objectSpread({}, prev), {}, {
-                            rawText: fullResponseText,
-                            stages: _parsed.stages
-                          });
-                        });
-                        setInternalStage(_parsed.latestStage || 1);
-                      }
-                      _context13.n = 5;
-                      break;
-                    case 4:
-                      _context13.p = 4;
-                      _t8 = _context13.v;
-                      console.warn('流数据片段解析失败（跳过等待拼接）:', _t8);
-                    case 5:
-                      return _context13.a(2);
-                  }
-                }, _loop, null, [[2, 4]]);
-              });
-              _iterator2.s();
-            case 16:
-              if ((_step2 = _iterator2.n()).done) {
-                _context14.n = 19;
-                break;
-              }
-              return _context14.d(_regeneratorValues(_loop()), 17);
-            case 17:
-              _ret = _context14.v;
-              if (!(_ret === 0)) {
-                _context14.n = 18;
-                break;
-              }
-              return _context14.a(3, 18);
-            case 18:
-              _context14.n = 16;
-              break;
-            case 19:
-              _context14.n = 21;
-              break;
-            case 20:
-              _context14.p = 20;
-              _t0 = _context14.v;
-              _iterator2.e(_t0);
-            case 21:
-              _context14.p = 21;
-              _iterator2.f();
-              return _context14.f(21);
-            case 22:
-              _context14.n = 12;
-              break;
-            case 23:
-              if (!isStreamedData && rawBuffer.trim()) {
-                try {
-                  _data3 = JSON.parse(rawBuffer);
-                  finishReason = extractProcessingFinishReason(_data3);
-                  fullResponseText = extractProcessingResponseText(_data3);
-                } catch (e) {
-                  fullResponseText = '## 接口返回格式异常\n\n大模型接口返回了非标准的文本结构。\n\n' + rawBuffer;
-                }
-                _parsed2 = parseStreamedText(fullResponseText);
-                setCurrentSession(function (prev) {
-                  return _objectSpread(_objectSpread({}, prev), {}, {
-                    rawText: fullResponseText,
-                    stages: _parsed2.stages
-                  });
-                });
-                setInternalStage(_parsed2.latestStage || 1);
-              }
-              if (fullResponseText.trim()) {
-                _context14.n = 24;
-                break;
-              }
-              throw new Error('大模型未返回任何有效内容，请检查接口配置或稍后重试。');
-            case 24:
-              return _context14.a(2, {
+              return _context13.a(2, {
                 text: fullResponseText,
                 finishReason: finishReason
               });
           }
-        }, _callee13, null, [[15, 20, 21, 22], [3, 5]]);
+        }, _callee13);
       }));
       return function (_x14) {
         return _ref9.apply(this, arguments);
@@ -2339,7 +2150,7 @@ function App() {
         shouldShowResults,
         initialMessages,
         processingResult,
-        _fullResponseText,
+        fullResponseText,
         assessment,
         retryCount,
         finalParsed,
@@ -2350,16 +2161,16 @@ function App() {
         updatedHistory,
         isCancelled,
         errorMessage,
-        _args15 = arguments,
-        _t1,
-        _t10;
-      return _regenerator().w(function (_context15) {
-        while (1) switch (_context15.p = _context15.n) {
+        _args14 = arguments,
+        _t8,
+        _t9;
+      return _regenerator().w(function (_context14) {
+        while (1) switch (_context14.p = _context14.n) {
           case 0:
-            overrideText = _args15.length > 0 && _args15[0] !== undefined ? _args15[0] : null;
+            overrideText = _args14.length > 0 && _args14[0] !== undefined ? _args14[0] : null;
             textToProcess = (typeof overrideText === 'string' ? overrideText : inputText).trim();
             if (apiConfig.apiKey) {
-              _context15.n = 1;
+              _context14.n = 1;
               break;
             }
             setToast({
@@ -2367,10 +2178,10 @@ function App() {
               type: 'error'
             });
             setIsConfigOpen(true);
-            return _context15.a(2);
+            return _context14.a(2);
           case 1:
             if (apiConfig.systemPrompt.trim()) {
-              _context15.n = 2;
+              _context14.n = 2;
               break;
             }
             setToast({
@@ -2378,17 +2189,17 @@ function App() {
               type: 'error'
             });
             setIsConfigOpen(true);
-            return _context15.a(2);
+            return _context14.a(2);
           case 2:
             if (textToProcess) {
-              _context15.n = 3;
+              _context14.n = 3;
               break;
             }
             setToast({
               message: '请输入需加工的文章或文案',
               type: 'error'
             });
-            return _context15.a(2);
+            return _context14.a(2);
           case 3:
             setInputText(textToProcess);
             setIsProcessing(true);
@@ -2414,7 +2225,7 @@ function App() {
             processingController = new AbortController();
             processingAbortRef.current = processingController;
             shouldShowResults = false;
-            _context15.p = 4;
+            _context14.p = 4;
             initialMessages = [{
               role: 'system',
               content: apiConfig.systemPrompt
@@ -2422,15 +2233,15 @@ function App() {
               role: 'user',
               content: "\u8BF7\u5904\u7406\u4EE5\u4E0B\u6587\u7AE0\uFF1A\n\n".concat(textToProcess, "\n\n\u8F93\u51FA\u8981\u6C42\uFF1A\u9636\u6BB51\u5148\u5224\u65AD\u6807\u51C6\u3001\u77ED\u6587\u6216\u5355\u70B9\u6A21\u5F0F\uFF0C\u5E76\u6309\u72EC\u7ACB\u4FE1\u606F\u5355\u5143\u51B3\u5B9A\u9875\u6570\uFF1B\u9636\u6BB52\u533A\u5206\u4F5C\u8005\u81EA\u8FF0\u3001\u516C\u5F00\u4E8B\u5B9E\u3001\u89C2\u70B9\u5224\u65AD\u548C\u573A\u666F\u63CF\u8FF0\uFF1B\u9636\u6BB53\u6309\u52A0\u5DE5\u6A21\u5F0F\u5FE0\u5B9E\u6574\u7406\uFF0C\u77ED\u6587\u548C\u5355\u70B9\u6A21\u5F0F\u4E0D\u5F97\u6269\u5199\uFF0C\u4F46\u4ECD\u5FC5\u987B\u8F93\u51FA\u5B8C\u6574\u7684\u7CBE\u4FEE\u7248\u6587\u7AE0\u6B63\u6587\uFF0C\u4E0D\u5F97\u53EA\u8F93\u51FA\u68C0\u67E5\u8BF4\u660E\u3001\u5361\u7247\u63D0\u7EB2\u6216\u4E00\u53E5\u6458\u8981\uFF0C\u4E0D\u5F97\u65B0\u589E\u6570\u636E\u3001\u6848\u4F8B\u3001\u573A\u666F\u6216\u6BD4\u55BB\uFF1B\u9636\u6BB54\u4E0E\u9636\u6BB55\u5FC5\u987B\u4F7F\u7528\u540C\u4E00\u4E3B\u5173\u7CFB\u5E76\u4E00\u4E00\u5BF9\u5E94\u3002")
             }];
-            _context15.n = 5;
+            _context14.n = 5;
             return requestProcessingText(initialMessages, processingController.signal);
           case 5:
-            processingResult = _context15.v;
-            _fullResponseText = processingResult.text;
-            assessment = applyProcessingFinishReason(assessProcessingResult(_fullResponseText, textToProcess), processingResult.finishReason);
+            processingResult = _context14.v;
+            fullResponseText = processingResult.text;
+            assessment = applyProcessingFinishReason(assessProcessingResult(fullResponseText, textToProcess), processingResult.finishReason);
             retryCount = 0;
             if (!assessment.shouldRetry) {
-              _context15.n = 7;
+              _context14.n = 7;
               break;
             }
             retryCount = 1;
@@ -2454,12 +2265,12 @@ function App() {
               stopReason: '',
               warning: ''
             });
-            _context15.n = 6;
-            return requestProcessingText(buildProcessingMessages(textToProcess, _fullResponseText, apiConfig.systemPrompt), processingController.signal);
+            _context14.n = 6;
+            return requestProcessingText(buildProcessingMessages(textToProcess, fullResponseText, apiConfig.systemPrompt), processingController.signal);
           case 6:
-            processingResult = _context15.v;
-            _fullResponseText = processingResult.text;
-            assessment = applyProcessingFinishReason(assessProcessingResult(_fullResponseText, textToProcess), processingResult.finishReason);
+            processingResult = _context14.v;
+            fullResponseText = processingResult.text;
+            assessment = applyProcessingFinishReason(assessProcessingResult(fullResponseText, textToProcess), processingResult.finishReason);
           case 7:
             assessment = ensureCompactStage3Content(assessment, textToProcess);
             finalParsed = assessment.parsed;
@@ -2468,7 +2279,7 @@ function App() {
             warning = isHalted ? '' : assessment.warning || '';
             setCurrentSession(function (prev) {
               return _objectSpread(_objectSpread({}, prev), {}, {
-                rawText: _fullResponseText,
+                rawText: fullResponseText,
                 stages: finalParsed.stages,
                 isHalted: isHalted,
                 stopReason: stopReason,
@@ -2480,7 +2291,7 @@ function App() {
               title: textToProcess.substring(0, 20) + '...',
               date: new Date().toLocaleString(),
               sessionData: {
-                rawText: _fullResponseText,
+                rawText: fullResponseText,
                 stages: finalParsed.stages,
                 isHalted: isHalted,
                 stopReason: stopReason,
@@ -2491,8 +2302,8 @@ function App() {
               originalInput: textToProcess
             };
             updatedHistory = [toHistoryIndex(newHistoryItem)].concat(_toConsumableArray(history)).slice(0, HISTORY_LIMIT);
-            _context15.p = 8;
-            _context15.n = 9;
+            _context14.p = 8;
+            _context14.n = 9;
             return saveSessionRecord(newHistoryItem);
           case 9:
             setHistory(updatedHistory);
@@ -2501,13 +2312,13 @@ function App() {
               deleteSessionRecord(item.id)["catch"](function () {});
               deleteSessionImages(item.id)["catch"](function () {});
             });
-            _context15.n = 11;
+            _context14.n = 11;
             break;
           case 10:
-            _context15.p = 10;
-            _t1 = _context15.v;
+            _context14.p = 10;
+            _t8 = _context14.v;
             setToast({
-              message: "\u7ED3\u679C\u5DF2\u751F\u6210\uFF0C\u4F46\u5386\u53F2\u8BB0\u5F55\u4FDD\u5B58\u5931\u8D25: ".concat(_t1.message),
+              message: "\u7ED3\u679C\u5DF2\u751F\u6210\uFF0C\u4F46\u5386\u53F2\u8BB0\u5F55\u4FDD\u5B58\u5931\u8D25: ".concat(_t8.message),
               type: 'error',
               duration: 5000
             });
@@ -2519,13 +2330,13 @@ function App() {
               duration: isHalted ? 6000 : 3000
             });
             shouldShowResults = true;
-            _context15.n = 13;
+            _context14.n = 13;
             break;
           case 12:
-            _context15.p = 12;
-            _t10 = _context15.v;
-            isCancelled = _t10.message === '已停止运算';
-            errorMessage = isCancelled ? '已停止本次运算' : formatProcessingError(_t10);
+            _context14.p = 12;
+            _t9 = _context14.v;
+            isCancelled = _t9.message === '已停止运算';
+            errorMessage = isCancelled ? '已停止本次运算' : formatProcessingError(_t9);
             if (!isCancelled) {
               setCurrentSession(function (prev) {
                 return _objectSpread(_objectSpread({}, prev), {}, {
@@ -2542,13 +2353,13 @@ function App() {
             });
             shouldShowResults = !isCancelled;
           case 13:
-            _context15.p = 13;
+            _context14.p = 13;
             if (processingAbortRef.current === processingController) processingAbortRef.current = null;
             setIsProcessing(false);
             setShowResults(shouldShowResults);
-            return _context15.f(13);
+            return _context14.f(13);
           case 14:
-            return _context15.a(2);
+            return _context14.a(2);
         }
       }, _callee14, null, [[8, 10], [4, 12, 13, 14]]);
     }));
@@ -2560,15 +2371,15 @@ function App() {
   var loadHistoryItem = function () {
     var _loadHistoryItem = _asyncToGenerator(_regenerator().m(function _callee15(id) {
       var item, highest, i, _item$sessionData$sta;
-      return _regenerator().w(function (_context16) {
-        while (1) switch (_context16.n) {
+      return _regenerator().w(function (_context15) {
+        while (1) switch (_context15.n) {
           case 0:
-            _context16.n = 1;
+            _context15.n = 1;
             return loadSessionRecord(id);
           case 1:
-            item = _context16.v;
+            item = _context15.v;
             if (!item) {
-              _context16.n = 5;
+              _context15.n = 5;
               break;
             }
             setActiveHistoryId(id);
@@ -2578,25 +2389,25 @@ function App() {
             i = 6;
           case 2:
             if (!(i >= 1)) {
-              _context16.n = 4;
+              _context15.n = 4;
               break;
             }
             if (!((_item$sessionData$sta = item.sessionData.stages[i]) !== null && _item$sessionData$sta !== void 0 && _item$sessionData$sta.trim())) {
-              _context16.n = 3;
+              _context15.n = 3;
               break;
             }
             highest = i;
-            return _context16.a(3, 4);
+            return _context15.a(3, 4);
           case 3:
             i--;
-            _context16.n = 2;
+            _context15.n = 2;
             break;
           case 4:
             setInternalStage(highest);
             setShowResults(true);
             replaceImageResults({});
             if (highest >= 5) setActiveStageTab('step3');else if (highest >= 3) setActiveStageTab('step2');else setActiveStageTab('step1');
-            _context16.n = 6;
+            _context15.n = 6;
             break;
           case 5:
             setToast({
@@ -2604,7 +2415,7 @@ function App() {
               type: 'error'
             });
           case 6:
-            return _context16.a(2);
+            return _context15.a(2);
         }
       }, _callee15);
     }));
@@ -2616,26 +2427,26 @@ function App() {
   var retryHistoryItem = function () {
     var _retryHistoryItem = _asyncToGenerator(_regenerator().m(function _callee16(id) {
       var item;
-      return _regenerator().w(function (_context17) {
-        while (1) switch (_context17.n) {
+      return _regenerator().w(function (_context16) {
+        while (1) switch (_context16.n) {
           case 0:
-            _context17.n = 1;
+            _context16.n = 1;
             return loadSessionRecord(id);
           case 1:
-            item = _context17.v;
+            item = _context16.v;
             if (item !== null && item !== void 0 && item.originalInput) {
-              _context17.n = 2;
+              _context16.n = 2;
               break;
             }
             setToast({
               message: '该记录缺少原文备份，无法重试',
               type: 'error'
             });
-            return _context17.a(2);
+            return _context16.a(2);
           case 2:
             handleStartProcessing(item.originalInput);
           case 3:
-            return _context17.a(2);
+            return _context16.a(2);
         }
       }, _callee16);
     }));
@@ -2658,42 +2469,42 @@ function App() {
   };
   var copyToClipboard = function () {
     var _copyToClipboard = _asyncToGenerator(_regenerator().m(function _callee17(text, label) {
-      var _navigator$clipboard, _t11, _t12;
-      return _regenerator().w(function (_context18) {
-        while (1) switch (_context18.p = _context18.n) {
+      var _navigator$clipboard, _t0, _t1;
+      return _regenerator().w(function (_context17) {
+        while (1) switch (_context17.p = _context17.n) {
           case 0:
             if (text) {
-              _context18.n = 1;
+              _context17.n = 1;
               break;
             }
             setToast({
               message: "".concat(label, " \u6682\u65E0\u53EF\u590D\u5236\u5185\u5BB9"),
               type: 'error'
             });
-            return _context18.a(2);
+            return _context17.a(2);
           case 1:
-            _context18.p = 1;
+            _context17.p = 1;
             if ((_navigator$clipboard = navigator.clipboard) !== null && _navigator$clipboard !== void 0 && _navigator$clipboard.writeText) {
-              _context18.n = 2;
+              _context17.n = 2;
               break;
             }
             throw new Error('Clipboard API unavailable');
           case 2:
-            _context18.n = 3;
+            _context17.n = 3;
             return navigator.clipboard.writeText(text);
           case 3:
             setToast({
               message: "".concat(label, " \u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F"),
               type: 'success'
             });
-            _context18.n = 8;
+            _context17.n = 8;
             break;
           case 4:
-            _context18.p = 4;
-            _t11 = _context18.v;
-            _context18.p = 5;
+            _context17.p = 4;
+            _t0 = _context17.v;
+            _context17.p = 5;
             if (fallbackCopyText(text)) {
-              _context18.n = 6;
+              _context17.n = 6;
               break;
             }
             throw new Error('Fallback copy failed');
@@ -2702,17 +2513,17 @@ function App() {
               message: "".concat(label, " \u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F"),
               type: 'success'
             });
-            _context18.n = 8;
+            _context17.n = 8;
             break;
           case 7:
-            _context18.p = 7;
-            _t12 = _context18.v;
+            _context17.p = 7;
+            _t1 = _context17.v;
             setToast({
               message: "".concat(label, " \u590D\u5236\u5931\u8D25\uFF0C\u8BF7\u624B\u52A8\u590D\u5236"),
               type: 'error'
             });
           case 8:
-            return _context18.a(2);
+            return _context17.a(2);
         }
       }, _callee17, null, [[5, 7], [1, 4]]);
     }));
@@ -3261,20 +3072,17 @@ function App() {
   }), React.createElement("div", {
     className: "relative z-10 bg-white/90 shadow-xl rounded-2xl w-16 h-16 flex items-center justify-center border border-white/80 backdrop-blur-md"
   }, React.createElement(Icon, {
-    name: internalStage >= 5 ? "Image" : internalStage >= 3 ? "Cpu" : "Database",
+    name: "Database",
     className: "w-8 h-8 text-indigo-600 animate-pulse-slow",
     strokeWidth: 1.5
   }))), React.createElement("div", {
     className: "text-center space-y-3"
   }, React.createElement("h3", {
-    className: "text-[18px] font-extrabold text-slate-800 tracking-tight transition-all duration-300"
-  }, STAGE_LOADING_TEXT[internalStage] || "连接核心计算引擎..."), React.createElement("div", {
+    className: "text-[18px] font-extrabold text-slate-800 tracking-tight"
+  }, "AI \u6B63\u5728\u5904\u7406\u5B8C\u6574\u7269\u6599\u5305..."), React.createElement("div", {
     className: "w-64 h-1.5 bg-slate-200/50 rounded-full overflow-hidden mx-auto mt-6 backdrop-blur-sm"
   }, React.createElement("div", {
-    className: "h-full bg-gradient-to-r from-indigo-500 to-sky-400 transition-all duration-500 ease-out",
-    style: {
-      width: "".concat(internalStage / 6 * 100, "%")
-    }
+    className: "processing-wait-bar h-full bg-gradient-to-r from-indigo-500 to-sky-400"
   })))), showResults && React.createElement("div", {
     className: "w-full pl-8 pr-[calc(2rem+5px)] md:pl-12 md:pr-[calc(3rem+5px)] pt-8 pb-4 z-20 shrink-0 relative animate-fade-in-down"
   }, React.createElement("div", {

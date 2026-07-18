@@ -35,6 +35,8 @@
     .processing-action-button.is-running { background: #d97706; border-color: #f59e0b; }
     .processing-action-button.is-running:hover { background: #b45309; }
     .processing-action-button.is-disabled { background: rgba(255,255,255,.72); color: #94a3b8; cursor: not-allowed; box-shadow: none; }
+    @keyframes processingWait { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
+    .processing-wait-bar { width: 32%; animation: processingWait 1.4s ease-in-out infinite; }
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 

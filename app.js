@@ -1436,7 +1436,8 @@ var HtmlCard = function HtmlCard(_ref3) {
     className: "moreimg-card-media"
   }, imageUrl ? React.createElement("img", {
     src: imageUrl,
-    alt: ""
+    alt: "",
+    decoding: "async"
   }) : React.createElement("div", {
     className: "moreimg-card-visual-placeholder"
   })), React.createElement("div", {
@@ -1525,6 +1526,7 @@ var VisualPreview = function VisualPreview(_ref5) {
     src: imageUrl,
     alt: alt,
     className: "visual-preview-image",
+    decoding: "async",
     onLoad: function onLoad(event) {
       return setNaturalSize({
         width: event.currentTarget.naturalWidth,
@@ -1536,6 +1538,20 @@ var VisualPreview = function VisualPreview(_ref5) {
   }, React.createElement("span", null, React.createElement("strong", null, "\u9884\u89C8\u6846 3:4"), " \xB7 \u539F\u56FE\u7B49\u6BD4\u663E\u793A"), naturalSize && React.createElement("span", {
     className: isThreeByFour ? '' : 'visual-preview-meta-warning'
   }, "\u539F\u56FE ", naturalSize.width, "\xD7", naturalSize.height, isThreeByFour ? '' : ' · 尺寸不匹配')));
+};
+var handleTabListKeyDown = function handleTabListKeyDown(event) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  var tabList = event.currentTarget.closest('[role="tablist"]');
+  if (!tabList) return;
+  var tabs = _toConsumableArray(tabList.querySelectorAll('[role="tab"]')).filter(function (tab) {
+    return !tab.disabled;
+  });
+  var currentIndex = tabs.indexOf(event.currentTarget);
+  if (currentIndex < 0 || tabs.length < 2) return;
+  event.preventDefault();
+  var nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : event.key === 'ArrowRight' ? (currentIndex + 1) % tabs.length : (currentIndex - 1 + tabs.length) % tabs.length;
+  tabs[nextIndex].focus();
+  tabs[nextIndex].click();
 };
 var Toast = function Toast(_ref6) {
   var message = _ref6.message,
@@ -1551,29 +1567,37 @@ var Toast = function Toast(_ref6) {
     };
   }, [onClose, duration]);
   return React.createElement("div", {
-    className: "fixed top-6 right-6 z-50 flex items-center px-5 py-4 rounded-2xl shadow-lg border backdrop-blur-xl animate-fade-in-down\n          ".concat(type === 'success' ? 'bg-white border-slate-200/60 text-slate-800' : 'bg-white border-red-200 text-slate-800')
-  }, type === 'success' ? React.createElement("div", {
-    className: "w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center mr-3 relative border border-indigo-100/50"
+    className: "mi-toast mi-feedback mi-feedback-".concat(type === 'error' ? 'error' : 'success', " animate-fade-in-down"),
+    role: type === 'error' ? 'alert' : 'status',
+    "aria-live": type === 'error' ? 'assertive' : 'polite',
+    "aria-atomic": "true"
   }, React.createElement("div", {
-    className: "absolute inset-0 bg-indigo-400 rounded-full animate-ping opacity-20"
-  }), React.createElement(Icon, {
-    name: "Sparkles",
-    className: "w-4 h-4 text-indigo-500"
-  })) : React.createElement("div", {
-    className: "w-8 h-8 rounded-full bg-red-50 flex items-center justify-center mr-3 border border-red-100"
+    className: "mi-toast-icon"
   }, React.createElement(Icon, {
-    name: "AlertCircle",
-    className: "w-4 h-4 text-red-500"
+    name: type === 'error' ? 'AlertCircle' : 'CheckCircle2',
+    className: "h-4 w-4"
   })), React.createElement("span", {
-    className: "font-semibold text-[14px]"
-  }, message));
+    className: "mi-toast-message"
+  }, message), React.createElement("button", {
+    type: "button",
+    onClick: onClose,
+    className: "mi-icon-button mi-icon-button-compact mi-toast-dismiss",
+    "aria-label": "\u5173\u95ED\u901A\u77E5",
+    title: "\u5173\u95ED\u901A\u77E5"
+  }, React.createElement(Icon, {
+    name: "X",
+    className: "h-4 w-4"
+  })));
 };
 var ConfigStatus = function ConfigStatus(_ref7) {
   var state = _ref7.state;
   if (!state || state.status === 'idle') return null;
   var iconName = state.status === 'loading' ? 'LoaderCircle' : state.status === 'success' ? 'CheckCircle2' : 'AlertCircle';
+  var feedbackType = state.status === 'loading' ? 'neutral' : state.status;
   return React.createElement("div", {
-    className: "config-status config-status-".concat(state.status)
+    className: "mi-feedback mi-feedback-".concat(feedbackType, " config-status config-status-").concat(state.status),
+    role: state.status === 'error' ? 'alert' : 'status',
+    "aria-live": "polite"
   }, React.createElement(Icon, {
     name: iconName,
     className: "mt-0.5 h-3.5 w-3.5 shrink-0 ".concat(state.status === 'loading' ? 'animate-spin' : '')
@@ -1776,6 +1800,7 @@ function App() {
   var htmlCardRefs = useRef({});
   var htmlExportInFlightRef = useRef(false);
   var resultScrollRef = useRef(null);
+  var resultsStageNavRef = useRef(null);
   var parsedSession = useMemo(function () {
     var _currentSession$packa;
     if (((_currentSession$packa = currentSession.packageData) === null || _currentSession$packa === void 0 ? void 0 : _currentSession$packa.status) === 'complete') {
@@ -1816,6 +1841,21 @@ function App() {
   useEffect(function () {
     if (!showResults || !resultScrollRef.current) return;
     resultScrollRef.current.scrollTop = 0;
+  }, [activeStageTab, activeHistoryId, showResults]);
+  useEffect(function () {
+    if (!showResults || !resultsStageNavRef.current) return;
+    var revealActiveStage = function revealActiveStage() {
+      var _resultsStageNavRef$c;
+      (_resultsStageNavRef$c = resultsStageNavRef.current) === null || _resultsStageNavRef$c === void 0 || (_resultsStageNavRef$c = _resultsStageNavRef$c.querySelector('[aria-selected="true"]')) === null || _resultsStageNavRef$c === void 0 || _resultsStageNavRef$c.scrollIntoView({
+        block: 'nearest',
+        inline: 'nearest'
+      });
+    };
+    revealActiveStage();
+    window.addEventListener('resize', revealActiveStage);
+    return function () {
+      return window.removeEventListener('resize', revealActiveStage);
+    };
   }, [activeStageTab, activeHistoryId, showResults]);
   useEffect(function () {
     if (!isProcessing || showResults) return;
@@ -3039,12 +3079,12 @@ function App() {
     });
     if (!hasContent) {
       return React.createElement("div", {
-        className: "flex flex-col items-center justify-center py-20 animate-fade-in-up"
+        className: "mi-empty-state mi-empty-state-panel animate-fade-in-up"
       }, React.createElement("div", {
-        className: "w-16 h-16 bg-white/60 backdrop-blur-md rounded-2xl flex items-center justify-center mb-4 border border-white/80 shadow-sm"
+        className: "mi-empty-state-icon mi-empty-state-icon-large mb-4"
       }, React.createElement(Icon, {
         name: "Box",
-        className: "w-8 h-8 text-slate-300"
+        className: "w-6 h-6"
       })), React.createElement("p", {
         className: "text-[15px] font-bold text-slate-500 mb-1"
       }, "\u5F53\u524D\u9636\u6BB5\u6682\u65E0\u5185\u5BB9"), React.createElement("p", {
@@ -3057,14 +3097,13 @@ function App() {
       var content = isJsonPackage ? getPackageStageText(currentSession.packageData, sId) : currentSession.stages[sId];
       if (!content || !content.trim()) return null;
       return React.createElement("div", {
-        key: sId,
-        className: "animate-fade-in-up"
+        key: sId
       }, React.createElement("div", {
         className: "visual-stage-heading"
       }, React.createElement("h4", {
         className: "visual-stage-heading-title"
       }, sId === 1 ? 'AI 准入判型' : sId === 2 ? '深度事实核查与骨架提取' : sId === 3 ? '精修版文章重构' : sId === 4 ? '知识卡片内容包' : sId === 5 ? '视觉生成与成品对比' : '')), React.createElement("div", null, sId === 3 ? React.createElement("div", {
-        className: "bg-white/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl shadow-sm border border-slate-200"
+        className: "mi-surface mi-surface-panel stage-content-panel p-8 md:p-10"
       }, React.createElement(FormattedContent, {
         text: content
       })) : sId === 4 ? function () {
@@ -3074,7 +3113,7 @@ function App() {
           }, currentSession.packageData.pages.map(function (page, index, pages) {
             return React.createElement("div", {
               key: page.page_id,
-              className: "content-card-panel"
+              className: "mi-surface mi-surface-panel content-card-panel"
             }, React.createElement("h3", {
               className: "text-[18px] font-bold text-slate-800 mb-6 flex items-center"
             }, React.createElement("span", {
@@ -3113,7 +3152,7 @@ function App() {
           }, cardBlocks.map(function (block, i) {
             return React.createElement("div", {
               key: i,
-              className: "content-card-panel"
+              className: "mi-surface mi-surface-panel content-card-panel"
             }, React.createElement("h3", {
               className: "text-[18px] font-bold text-slate-800 mb-6 flex items-center"
             }, React.createElement("span", {
@@ -3126,7 +3165,7 @@ function App() {
           }));
         }
         return React.createElement("div", {
-          className: "bg-white/80 backdrop-blur-xl p-8 rounded-3xl shadow-sm border border-slate-200"
+          className: "mi-surface mi-surface-panel stage-content-panel p-8"
         }, React.createElement(FormattedContent, {
           text: content
         }));
@@ -3158,7 +3197,7 @@ function App() {
           return React.createElement("div", {
             className: "visual-workbench"
           }, React.createElement("section", {
-            className: "visual-panel"
+            className: "mi-surface mi-surface-panel mi-surface-raised visual-panel"
           }, React.createElement("div", {
             className: "visual-page-toolbar"
           }, React.createElement("div", {
@@ -3171,10 +3210,12 @@ function App() {
               type: "button",
               role: "tab",
               "aria-selected": section.title === selectedPromptSection.title,
+              tabIndex: section.title === selectedPromptSection.title ? 0 : -1,
+              onKeyDown: handleTabListKeyDown,
               onClick: function onClick() {
                 return setActiveVisualPage(section.title);
               },
-              className: "visual-page-tab ".concat(section.title === selectedPromptSection.title ? 'visual-page-tab-active' : '')
+              className: "mi-tab mi-tab-page visual-page-tab ".concat(section.title === selectedPromptSection.title ? 'visual-page-tab-active' : '')
             }, section.title);
           }))), React.createElement("div", {
             className: "visual-panel-header"
@@ -3194,7 +3235,8 @@ function App() {
               return handleGenerateImage(selectedPromptSection.title, visualOnlyPrompt, 'visual-only');
             },
             disabled: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading',
-            className: "visual-button visual-button-primary"
+            "aria-busy": (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading',
+            className: "mi-button mi-button-standard visual-button visual-button-primary"
           }, React.createElement(Icon, {
             name: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? 'LoaderCircle' : 'Sparkles',
             className: "mr-2 h-4 w-4 ".concat((imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? 'animate-spin' : '')
@@ -3203,12 +3245,13 @@ function App() {
               return handleGenerateImage(selectedPromptSection.title, fullImagePrompt, 'full');
             },
             disabled: !matchingCard || (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading',
-            className: "visual-button"
+            "aria-busy": (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading',
+            className: "mi-button mi-button-standard visual-button"
           }, React.createElement(Icon, {
             name: (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? 'LoaderCircle' : 'LayoutTemplate',
             className: "mr-2 h-4 w-4 ".concat((fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? 'animate-spin' : '')
           }), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? '生成中' : fullImageResult ? '重生成整图' : '生成 AI 整图'))), React.createElement("div", {
-            className: "visual-notice visual-panel-notice"
+            className: "mi-feedback mi-feedback-info visual-notice visual-panel-notice"
           }, React.createElement(Icon, {
             name: "Info",
             className: "mt-0.5 h-3.5 w-3.5 shrink-0"
@@ -3221,22 +3264,25 @@ function App() {
           }, "\u751F\u6210\u7ED3\u679C"), React.createElement("div", {
             className: "visual-column-copy"
           }, "\u56FA\u5B9A 3:4 \u68C0\u67E5\u6846\uFF1A\u4E0A\u65B9\u5FEB\u901F\u786E\u8BA4\u7D20\u6750\uFF0C\u5E95\u90E8\u518D\u8FDB\u884C\u6210\u54C1\u5BF9\u6BD4\u3002"), (legacyVisualResult === null || legacyVisualResult === void 0 ? void 0 : legacyVisualResult.status) === 'success' && (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) !== 'success' && React.createElement("div", {
-            className: "visual-notice mt-4"
+            className: "mi-feedback mi-feedback-warning visual-notice mt-4"
           }, "\u65E7\u7248\u4E3B\u89C6\u89C9\u4E0D\u80FD\u7528\u4E8E HTML \u6210\u54C1\u5361\uFF0C\u8BF7\u91CD\u65B0\u751F\u6210\u4E3B\u89C6\u89C9\u3002"), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'error' && React.createElement("div", {
-            className: "visual-error"
+            className: "mi-feedback mi-feedback-error visual-error",
+            role: "alert"
           }, "\u56FE\u7247\u751F\u6210\u5931\u8D25\uFF1A", imageResult.error), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'error' && React.createElement("div", {
-            className: "visual-error"
+            className: "mi-feedback mi-feedback-error visual-error",
+            role: "alert"
           }, "AI \u6574\u56FE\u751F\u6210\u5931\u8D25\uFF1A", fullImageResult.error), React.createElement("div", {
             className: "visual-result-grid"
           }, (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'success' ? React.createElement("div", {
-            className: "visual-result-item"
+            className: "mi-surface mi-surface-card visual-result-item"
           }, React.createElement("div", {
             className: "visual-result-item-header"
           }, React.createElement("span", null, "HTML \u4E3B\u89C6\u89C9"), React.createElement("button", {
+            type: "button",
             onClick: function onClick() {
               return downloadImage(selectedPromptSection.title, imageResult.imageUrl);
             },
-            className: "visual-result-action",
+            className: "mi-icon-button mi-icon-button-compact visual-result-action",
             "aria-label": "\u4E0B\u8F7D\u4E3B\u89C6\u89C9",
             title: "\u4E0B\u8F7D\u4E3B\u89C6\u89C9"
           }, React.createElement(Icon, {
@@ -3246,13 +3292,13 @@ function App() {
             imageUrl: imageResult.imageUrl,
             alt: "".concat(selectedPromptSection.title, " \u751F\u6210\u7ED3\u679C")
           })) : React.createElement("div", {
-            className: "visual-result-item"
+            className: "mi-surface mi-surface-card visual-result-item"
           }, React.createElement("div", {
             className: "visual-result-item-header"
           }, React.createElement("span", null, "HTML \u4E3B\u89C6\u89C9")), React.createElement("div", {
-            className: "visual-result-slot-empty"
+            className: "mi-empty-state mi-empty-state-media visual-result-slot-empty"
           }, React.createElement("div", {
-            className: "visual-result-slot-empty-icon"
+            className: "mi-empty-state-icon"
           }, React.createElement(Icon, {
             name: (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? 'LoaderCircle' : 'ImagePlus',
             className: "h-5 w-5 ".concat((imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? 'animate-spin' : '')
@@ -3261,28 +3307,30 @@ function App() {
           }, (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'loading' ? '生成中' : '等待生成')), React.createElement("div", {
             className: "visual-preview-meta"
           }, React.createElement("span", null, React.createElement("strong", null, "\u9884\u89C8\u6846 3:4"), " \xB7 \u56FA\u5B9A\u5361\u7247\u69FD\u4F4D"))), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'success' && !hiddenFullImages[selectedPromptSection.title] ? React.createElement("div", {
-            className: "visual-result-item"
+            className: "mi-surface mi-surface-card visual-result-item"
           }, React.createElement("div", {
             className: "visual-result-item-header"
           }, React.createElement("span", null, "AI \u6574\u56FE"), React.createElement("div", {
             className: "visual-result-actions"
           }, React.createElement("button", {
+            type: "button",
             onClick: function onClick() {
               return downloadImage("".concat(selectedPromptSection.title, "-AI\u6574\u56FE"), fullImageResult.imageUrl);
             },
-            className: "visual-result-action",
+            className: "mi-icon-button mi-icon-button-compact visual-result-action",
             "aria-label": "\u4E0B\u8F7D AI \u6574\u56FE",
             title: "\u4E0B\u8F7D AI \u6574\u56FE"
           }, React.createElement(Icon, {
             name: "Download",
             className: "h-3.5 w-3.5"
           })), React.createElement("button", {
+            type: "button",
             onClick: function onClick() {
               return setHiddenFullImages(function (prev) {
                 return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, selectedPromptSection.title, true));
               });
             },
-            className: "visual-result-action",
+            className: "mi-icon-button mi-icon-button-compact visual-result-action",
             "aria-label": "\u9690\u85CF AI \u6574\u56FE",
             title: "\u9690\u85CF AI \u6574\u56FE"
           }, React.createElement(Icon, {
@@ -3292,25 +3340,26 @@ function App() {
             imageUrl: fullImageResult.imageUrl,
             alt: "".concat(selectedPromptSection.title, " AI \u6574\u56FE")
           })) : React.createElement("div", {
-            className: "visual-result-item"
+            className: "mi-surface mi-surface-card visual-result-item"
           }, React.createElement("div", {
             className: "visual-result-item-header"
           }, React.createElement("span", null, "AI \u6574\u56FE"), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'success' && hiddenFullImages[selectedPromptSection.title] && React.createElement("button", {
+            type: "button",
             onClick: function onClick() {
               return setHiddenFullImages(function (prev) {
                 return _objectSpread(_objectSpread({}, prev), {}, _defineProperty({}, selectedPromptSection.title, false));
               });
             },
-            className: "visual-result-action",
+            className: "mi-icon-button mi-icon-button-compact visual-result-action",
             "aria-label": "\u663E\u793A AI \u6574\u56FE",
             title: "\u663E\u793A AI \u6574\u56FE"
           }, React.createElement(Icon, {
             name: "Eye",
             className: "h-3.5 w-3.5"
           }))), React.createElement("div", {
-            className: "visual-result-slot-empty"
+            className: "mi-empty-state mi-empty-state-media visual-result-slot-empty"
           }, React.createElement("div", {
-            className: "visual-result-slot-empty-icon"
+            className: "mi-empty-state-icon"
           }, React.createElement(Icon, {
             name: (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? 'LoaderCircle' : 'LayoutTemplate',
             className: "h-5 w-5 ".concat((fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? 'animate-spin' : '')
@@ -3327,10 +3376,11 @@ function App() {
           }, React.createElement("span", {
             className: "visual-prompt-label"
           }, "\u539F\u59CB\u89C6\u89C9\u63D0\u793A\u8BCD"), React.createElement("button", {
+            type: "button",
             onClick: function onClick() {
               return copyToClipboard(cleanPromptText, "[".concat(selectedPromptSection.title, "] \u539F\u59CB\u89C6\u89C9\u63D0\u793A\u8BCD"));
             },
-            className: "visual-result-action",
+            className: "mi-icon-button mi-icon-button-compact visual-result-action",
             "aria-label": "\u590D\u5236\u539F\u59CB\u89C6\u89C9\u63D0\u793A\u8BCD",
             title: "\u590D\u5236\u539F\u59CB\u89C6\u89C9\u63D0\u793A\u8BCD"
           }, React.createElement(Icon, {
@@ -3345,11 +3395,12 @@ function App() {
           }, React.createElement("span", {
             className: "visual-prompt-label"
           }, "AI \u6574\u56FE\u5B9E\u9645\u8BF7\u6C42"), React.createElement("button", {
+            type: "button",
             disabled: !matchingCard,
             onClick: function onClick() {
               return copyToClipboard(fullImagePrompt, "[".concat(selectedPromptSection.title, "] AI \u6574\u56FE\u8BF7\u6C42"));
             },
-            className: "visual-result-action",
+            className: "mi-icon-button mi-icon-button-compact visual-result-action",
             "aria-label": "\u590D\u5236 AI \u6574\u56FE\u8BF7\u6C42",
             title: "\u590D\u5236 AI \u6574\u56FE\u8BF7\u6C42"
           }, React.createElement(Icon, {
@@ -3370,9 +3421,10 @@ function App() {
           }, "HTML \u6210\u54C1\u4E0E AI \u6574\u56FE\u7EDF\u4E00\u6309 3:4 \u9884\u89C8\uFF0C\u5BFC\u51FA\u4EC5\u5305\u542B\u5DE6\u4FA7 HTML \u6210\u54C1\u3002")), React.createElement("span", {
             className: "visual-card-count"
           }, selectedPromptIndex + 1, " / ", htmlCards.length)), React.createElement("style", null, HTML_CARD_EXPORT_STYLES), React.createElement("div", {
-            className: "visual-panel visual-output-panel"
+            className: "mi-surface mi-surface-panel mi-surface-raised visual-panel visual-output-panel"
           }, !selectedHtmlCard && React.createElement("div", {
-            className: "visual-error"
+            className: "mi-feedback mi-feedback-error visual-error",
+            role: "alert"
           }, "\u672A\u627E\u5230\u4E0E\u300C", selectedPromptSection.title, "\u300D\u540C\u540D\u7684\u5361\u7247\u5185\u5BB9\uFF0C\u5DF2\u505C\u6B62\u6210\u54C1\u5408\u6210\uFF0C\u8BF7\u91CD\u65B0\u751F\u6210\u5B8C\u6574\u7269\u6599\u5305\u3002"), selectedHtmlCard && React.createElement("div", {
             className: "visual-output-card"
           }, React.createElement("div", {
@@ -3386,17 +3438,17 @@ function App() {
             disabled: (selectedHtmlImageResult === null || selectedHtmlImageResult === void 0 ? void 0 : selectedHtmlImageResult.status) !== 'success' || isSelectedHtmlCardExporting,
             "aria-busy": isSelectedHtmlCardExporting,
             title: isSelectedHtmlCardExporting ? '正在导出 HTML 成品' : (selectedHtmlImageResult === null || selectedHtmlImageResult === void 0 ? void 0 : selectedHtmlImageResult.status) === 'success' ? '导出左侧 HTML 成品 PNG（1242×1656）' : '请先生成无字主视觉',
-            className: "visual-button visual-export-button flex items-center justify-center"
+            className: "mi-button mi-button-standard visual-button visual-export-button"
           }, React.createElement(Icon, {
             name: isSelectedHtmlCardExporting ? 'Loader' : 'Download',
             className: "mr-1.5 h-3.5 w-3.5 ".concat(isSelectedHtmlCardExporting ? 'animate-spin' : '')
           }), " ", isSelectedHtmlCardExporting ? '导出中' : '导出 HTML 成品 PNG')), selectedHtmlCardExportError && React.createElement("div", {
-            className: "visual-error visual-export-error",
+            className: "mi-feedback mi-feedback-error visual-error visual-export-error",
             role: "alert"
           }, selectedHtmlCardExportError), React.createElement("div", {
             className: "visual-current-output-body"
           }, React.createElement("div", {
-            className: "visual-comparison-item"
+            className: "mi-surface mi-surface-card visual-comparison-item"
           }, React.createElement("div", {
             className: "visual-comparison-label"
           }, "HTML \u6210\u54C1"), React.createElement(HtmlCardPreview, null, React.createElement(HtmlCard, {
@@ -3411,7 +3463,7 @@ function App() {
           }, React.createElement("span", null, React.createElement("strong", null, "\u9884\u89C8\u6846 3:4"), " \xB7 HTML \u6210\u54C1"), React.createElement("span", null, "\u5BFC\u51FA 1242\xD71656")), (selectedHtmlImageResult === null || selectedHtmlImageResult === void 0 ? void 0 : selectedHtmlImageResult.status) !== 'success' && React.createElement("p", {
             className: "mt-3 text-center text-[11px] ".concat((selectedHtmlLegacyResult === null || selectedHtmlLegacyResult === void 0 ? void 0 : selectedHtmlLegacyResult.status) === 'success' ? 'text-amber-600' : 'text-slate-400')
           }, (selectedHtmlLegacyResult === null || selectedHtmlLegacyResult === void 0 ? void 0 : selectedHtmlLegacyResult.status) === 'success' ? '旧版主视觉不再用于 HTML 成品卡，请重新生成无字主视觉。' : '当前使用视觉占位，生成无字主视觉后会自动替换。')), React.createElement("div", {
-            className: "visual-comparison-item"
+            className: "mi-surface mi-surface-card visual-comparison-item"
           }, React.createElement("div", {
             className: "visual-comparison-label"
           }, "AI \u6574\u56FE"), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'success' && !hiddenFullImages[selectedPromptSection.title] ? React.createElement(React.Fragment, null, React.createElement("div", {
@@ -3419,13 +3471,15 @@ function App() {
           }, React.createElement("img", {
             src: fullImageResult.imageUrl,
             alt: "".concat(selectedHtmlCard.label, " AI \u6574\u56FE\u5BF9\u6BD4"),
+            loading: "lazy",
+            decoding: "async",
             className: "visual-comparison-image"
           })), React.createElement("div", {
             className: "visual-comparison-meta"
           }, React.createElement("span", null, React.createElement("strong", null, "\u9884\u89C8\u6846 3:4"), " \xB7 AI \u6574\u56FE"), React.createElement("span", null, "\u6A21\u578B\u6392\u7248\u8F93\u51FA"))) : React.createElement(React.Fragment, null, React.createElement("div", {
             className: "visual-comparison-preview-frame"
           }, React.createElement("div", {
-            className: "visual-comparison-empty"
+            className: "mi-empty-state mi-empty-state-inline visual-comparison-empty"
           }, React.createElement(Icon, {
             name: (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? 'LoaderCircle' : 'LayoutTemplate',
             className: "h-5 w-5 ".concat((fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'loading' ? 'animate-spin' : '')
@@ -3437,12 +3491,12 @@ function App() {
         }
         var fullCleanText = content.replace(/```[^\n]*\n?/g, '').replace(/```/g, '').trim();
         return React.createElement("div", {
-          className: "bg-white/80 backdrop-blur-xl p-8 rounded-3xl shadow-sm border border-slate-200"
+          className: "mi-surface mi-surface-panel stage-content-panel p-8"
         }, React.createElement(FormattedContent, {
           text: fullCleanText
         }));
       }() : React.createElement("div", {
-        className: "bg-white/80 backdrop-blur-xl p-8 md:p-10 rounded-3xl shadow-sm border border-slate-200"
+        className: "mi-surface mi-surface-panel stage-content-panel p-8 md:p-10"
       }, React.createElement(FormattedContent, {
         text: content
       }))));
@@ -3451,9 +3505,9 @@ function App() {
   var resultContent = useMemo(function () {
     if (!showResults) return null;
     return React.createElement("div", {
-      className: "animate-fade-in-up pb-20"
+      className: "pb-20"
     }, currentSession.isHalted && React.createElement("div", {
-      className: "processing-notice processing-notice-error",
+      className: "mi-feedback mi-feedback-error processing-notice processing-notice-error",
       role: "alert"
     }, React.createElement("div", {
       className: "processing-notice-icon"
@@ -3471,7 +3525,7 @@ function App() {
     }, "\u9700\u8981\u91CD\u8BD5")), React.createElement("p", {
       className: "processing-notice-message"
     }, currentSession.stopReason || '缺少必要阶段，请检查模型输出限制后重试。'))), !currentSession.isHalted && currentSession.warning && React.createElement("div", {
-      className: "processing-notice",
+      className: "mi-feedback mi-feedback-warning processing-notice",
       role: "status",
       "aria-live": "polite"
     }, React.createElement("div", {
@@ -3494,15 +3548,7 @@ function App() {
   var isButtonDisabled = !isProcessing && (!apiConfig.apiKey || !inputText.trim());
   return React.createElement("div", {
     className: "moreimg-app-shell flex flex-col md:flex-row h-screen overflow-hidden font-sans text-slate-800 relative bg-transparent"
-  }, React.createElement("div", {
-    className: "fixed inset-0 overflow-hidden pointer-events-none z-[-1] bg-slate-50/50"
-  }, React.createElement("div", {
-    className: "moreimg-background-blob absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] bg-indigo-400/40 blur-[90px] animate-blob-fluid transform-gpu"
-  }), React.createElement("div", {
-    className: "moreimg-background-blob absolute top-[10%] right-[-5%] w-[40vw] h-[40vw] bg-sky-300/40 blur-[90px] animate-blob-fluid animation-delay-1 transform-gpu"
-  }), React.createElement("div", {
-    className: "moreimg-background-blob absolute bottom-[-10%] left-[15%] w-[50vw] h-[50vw] bg-purple-400/40 blur-[90px] animate-blob-fluid animation-delay-2 transform-gpu"
-  })), toast && React.createElement(Toast, {
+  }, toast && React.createElement(Toast, {
     message: toast.message,
     type: toast.type,
     onClose: function onClose() {
@@ -3521,10 +3567,11 @@ function App() {
     className: "w-5 h-5 text-white",
     strokeWidth: 2
   })), "\u4E00\u6587\u591A\u56FE"), React.createElement("button", {
+    type: "button",
     onClick: function onClick() {
       return setIsConfigOpen(true);
     },
-    className: "sidebar-icon-button",
+    className: "mi-icon-button mi-icon-button-standard sidebar-icon-button",
     "aria-label": "\u6253\u5F00\u8BBE\u7F6E",
     title: "\u6253\u5F00\u8BBE\u7F6E"
   }, React.createElement(Icon, {
@@ -3547,7 +3594,7 @@ function App() {
   }))), React.createElement("button", {
     onClick: isProcessing ? handleStopProcessing : handleStartProcessing,
     disabled: isButtonDisabled,
-    className: "processing-action-button w-full h-12 shrink-0 rounded-xl font-bold text-[14px] flex items-center justify-center transition-all duration-300 relative overflow-hidden z-10 backdrop-blur-sm\n                ".concat(isButtonDisabled ? 'is-disabled' : isProcessing ? 'is-running' : 'is-ready')
+    className: "mi-button mi-button-prominent processing-action-button w-full shrink-0 font-bold text-[14px] relative overflow-hidden z-10 backdrop-blur-sm\n                ".concat(isButtonDisabled ? 'is-disabled' : isProcessing ? 'is-running' : 'is-ready')
   }, isProcessing ? React.createElement(React.Fragment, null, React.createElement(Icon, {
     name: "Square",
     className: "w-4 h-4 mr-2 text-white",
@@ -3567,33 +3614,41 @@ function App() {
   }, "\u6682\u65E0\u5386\u53F2\u8BB0\u5F55"), history.map(function (item) {
     return React.createElement("div", {
       key: item.id,
-      className: "relative group p-3.5 rounded-xl transition-all duration-200 border backdrop-blur-sm shrink-0\n                      ".concat(isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer', "\n                      ").concat(activeHistoryId === item.id && showResults ? 'bg-white/80 border-white/80 shadow-sm' : 'bg-white/30 border-white/40 hover:bg-white/60 hover:border-white/60'),
+      className: "mi-surface mi-surface-list history-item relative group backdrop-blur-sm shrink-0\n                      ".concat(isProcessing ? 'mi-surface-disabled' : '', "\n                      ").concat(activeHistoryId === item.id && showResults ? 'mi-surface-selected' : '')
+    }, React.createElement("button", {
+      type: "button",
+      className: "history-item-main pr-16",
       onClick: function onClick() {
         return !isProcessing && loadHistoryItem(item.id);
-      }
-    }, React.createElement("div", {
-      className: "pr-16"
+      },
+      disabled: isProcessing,
+      "aria-current": activeHistoryId === item.id && showResults ? 'true' : undefined,
+      "aria-label": "\u6253\u5F00\u5386\u53F2\u8BB0\u5F55\uFF1A".concat(item.title || '未命名')
     }, React.createElement("div", {
       className: "text-[13px] font-bold truncate flex items-center ".concat(activeHistoryId === item.id && showResults ? 'text-indigo-600' : 'text-slate-700')
     }, item.title || '未命名'), React.createElement("div", {
       className: "text-[11px] text-slate-400 mt-1.5 font-mono"
     }, item.date)), !isProcessing && React.createElement("div", {
-      className: "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all"
+      className: "history-item-actions absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-all"
     }, React.createElement("button", {
+      type: "button",
       onClick: function onClick(e) {
         e.stopPropagation();
         retryHistoryItem(item.id);
       },
-      className: "w-7 h-7 bg-indigo-50/80 text-indigo-500 rounded-lg flex items-center justify-center transition-all hover:bg-indigo-100 hover:text-indigo-600 shadow-sm border border-indigo-100/50",
+      className: "mi-icon-button mi-icon-button-compact history-item-action bg-indigo-50/80 text-indigo-500 hover:bg-indigo-100 hover:text-indigo-600 shadow-sm border border-indigo-100/50",
+      "aria-label": "\u518D\u6B21\u751F\u6210\uFF1A".concat(item.title || '未命名'),
       title: "\u518D\u6B21\u751F\u6210"
     }, React.createElement(Icon, {
       name: "RefreshCw",
       className: "w-3.5 h-3.5"
     })), React.createElement("button", {
+      type: "button",
       onClick: function onClick(e) {
         return deleteHistoryItem(item.id, e);
       },
-      className: "w-7 h-7 bg-red-50/80 text-red-500 rounded-lg flex items-center justify-center transition-all hover:bg-red-100 hover:text-red-600 shadow-sm border border-red-100/50",
+      className: "mi-icon-button mi-icon-button-compact history-item-action bg-red-50/80 text-red-500 hover:bg-red-100 hover:text-red-600 shadow-sm border border-red-100/50",
+      "aria-label": "\u5220\u9664\u8BB0\u5F55\uFF1A".concat(item.title || '未命名'),
       title: "\u5220\u9664\u8BB0\u5F55"
     }, React.createElement(Icon, {
       name: "Trash2",
@@ -3645,16 +3700,26 @@ function App() {
   }, React.createElement("div", {
     className: "results-stage-frame flex flex-col sm:flex-row sm:items-center justify-between gap-6"
   }, React.createElement("div", {
-    className: "results-stage-nav hide-scrollbar"
+    ref: resultsStageNavRef,
+    className: "results-stage-nav hide-scrollbar",
+    role: "tablist",
+    "aria-label": "\u7ED3\u679C\u9636\u6BB5"
   }, NEW_STAGES.map(function (stage) {
     var isActive = activeStageTab === stage.id;
     var isClickable = !currentSession.isHalted || stage.id === 'step1';
+    var isFocusable = isClickable && (isActive || currentSession.isHalted && stage.id === 'step1');
     return React.createElement("button", {
       key: stage.id,
+      type: "button",
+      role: "tab",
+      "aria-selected": isActive,
+      disabled: !isClickable,
+      tabIndex: isFocusable ? 0 : -1,
+      onKeyDown: handleTabListKeyDown,
       onClick: function onClick() {
         if (isClickable) setActiveStageTab(stage.id);
       },
-      className: "results-stage-tab\n                            ".concat(isClickable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50', "\n                            ").concat(isActive ? 'results-stage-tab-active' : '', "\n                          ")
+      className: "mi-tab mi-tab-stage results-stage-tab\n                            ".concat(isActive ? 'results-stage-tab-active' : '', "\n                          ")
     }, React.createElement(Icon, {
       name: stage.icon,
       className: "w-4 h-4 mr-2 transition-colors ".concat(isActive ? 'text-white' : 'text-slate-400')
@@ -3663,13 +3728,13 @@ function App() {
     }, stage.name));
   })))), React.createElement("div", {
     ref: resultScrollRef,
-    className: "flex-1 px-8 md:px-12 pb-10 custom-scrollbar relative z-10 transform-gpu moreimg-main-scroll ".concat(showResults ? 'overflow-y-scroll pt-2' : 'overflow-y-auto pt-8')
+    className: "flex-1 px-8 md:px-12 pb-10 custom-scrollbar relative z-10 moreimg-main-scroll ".concat(showResults ? 'overflow-y-scroll pt-2' : 'overflow-y-auto pt-8')
   }, React.createElement("div", {
     className: "results-stage-frame h-full"
   }, !isProcessing && !showResults && React.createElement("div", {
     className: "moreimg-empty-state h-full flex flex-col items-center justify-center animate-fade-in -mt-10"
   }, React.createElement("div", {
-    className: "w-20 h-20 bg-white/80 backdrop-blur-xl rounded-[1.5rem] shadow-sm border border-white/80 flex items-center justify-center mb-8 relative"
+    className: "moreimg-empty-icon w-20 h-20 rounded-[1.5rem] border border-white/80 flex items-center justify-center mb-8 relative"
   }, React.createElement("div", {
     className: "absolute inset-0 bg-indigo-50/50 rounded-[1.5rem] opacity-50 blur"
   }), React.createElement(Icon, {
@@ -3699,7 +3764,7 @@ function App() {
   }].map(function (feature, idx) {
     return React.createElement("div", {
       key: idx,
-      className: "bg-white/60 backdrop-blur-xl rounded-2xl p-6 border border-white/80 shadow-sm hover:shadow-md transition-shadow"
+      className: "mi-surface mi-surface-panel moreimg-feature-card p-6"
     }, React.createElement("div", {
       className: "w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center mb-4 border border-white/80 shadow-sm"
     }, React.createElement(Icon, {
@@ -3715,7 +3780,7 @@ function App() {
   }), React.createElement("div", {
     ref: messagesEndRef
   })))), isConfigOpen && React.createElement("div", {
-    className: "fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fade-in"
+    className: "fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 animate-fade-in"
   }, React.createElement("div", {
     className: "config-dialog flex flex-col animate-fade-in-down"
   }, React.createElement("div", {
@@ -3726,10 +3791,11 @@ function App() {
     name: "Settings",
     className: "w-5 h-5 mr-2 text-indigo-600"
   }), " \u79C1\u6709\u5F15\u64CE\u53CA\u6280\u80FD\u914D\u7F6E"), React.createElement("button", {
+    type: "button",
     onClick: function onClick() {
       return setIsConfigOpen(false);
     },
-    className: "sidebar-icon-button",
+    className: "mi-icon-button mi-icon-button-standard sidebar-icon-button",
     "aria-label": "\u5173\u95ED\u8BBE\u7F6E",
     title: "\u5173\u95ED\u8BBE\u7F6E"
   }, React.createElement(Icon, {
@@ -3756,7 +3822,8 @@ function App() {
       return handleLoadModels('text');
     },
     disabled: configTools.textModels.status === 'loading',
-    className: "config-action-button"
+    "aria-busy": configTools.textModels.status === 'loading',
+    className: "mi-button mi-button-compact config-action-button"
   }, React.createElement(Icon, {
     name: configTools.textModels.status === 'loading' ? 'LoaderCircle' : 'ListFilter',
     className: "h-3.5 w-3.5 ".concat(configTools.textModels.status === 'loading' ? 'animate-spin' : '')
@@ -3764,7 +3831,8 @@ function App() {
     type: "button",
     onClick: handleTestTextConnection,
     disabled: configTools.textTest.status === 'loading',
-    className: "config-action-button"
+    "aria-busy": configTools.textTest.status === 'loading',
+    className: "mi-button mi-button-compact config-action-button"
   }, React.createElement(Icon, {
     name: configTools.textTest.status === 'loading' ? 'LoaderCircle' : 'PlugZap',
     className: "h-3.5 w-3.5 ".concat(configTools.textTest.status === 'loading' ? 'animate-spin' : '')
@@ -3782,7 +3850,7 @@ function App() {
         apiUrl: e.target.value
       }));
     },
-    className: "config-input placeholder-slate-400"
+    className: "mi-field config-input placeholder-slate-400"
   }), React.createElement("div", {
     className: "config-hint"
   }, "\u5B9E\u9645\u8BF7\u6C42\uFF1A", resolveApiEndpoint(apiConfig.apiUrl, 'text') || '请填写地址', "\uFF1B\u5F53\u524D\u534F\u8BAE\uFF1A", isResponsesApiEndpoint(resolveApiEndpoint(apiConfig.apiUrl, 'text')) ? 'Responses API' : 'Chat Completions')), React.createElement("div", {
@@ -3797,7 +3865,7 @@ function App() {
       return handleModelSelection('text', e.target.value);
     },
     "aria-label": "\u9009\u62E9\u6587\u672C\u6A21\u578B",
-    className: "config-input config-model-select"
+    className: "mi-field config-input config-model-select"
   }, apiConfig.model && !textModels.includes(apiConfig.model) && React.createElement("option", {
     value: apiConfig.model
   }, apiConfig.model), textModels.map(function (model) {
@@ -3818,7 +3886,7 @@ function App() {
         model: e.target.value
       }));
     },
-    className: "config-input placeholder-slate-400"
+    className: "mi-field config-input placeholder-slate-400"
   })), React.createElement("div", {
     className: "config-field"
   }, React.createElement("label", {
@@ -3832,7 +3900,7 @@ function App() {
       }));
     },
     placeholder: "sk-...",
-    className: "config-input placeholder-slate-400"
+    className: "mi-field config-input placeholder-slate-400"
   }))), React.createElement(ConfigStatus, {
     state: configTools.textModels
   }), React.createElement(ConfigStatus, {
@@ -3849,7 +3917,7 @@ function App() {
   }), " \u52A0\u5DE5\u504F\u597D"), React.createElement("p", {
     className: "config-section-description"
   }, "MoreImg v6 \u6838\u5FC3\u89C4\u5219\u548C JSON \u534F\u8BAE\u5DF2\u5185\u7F6E\u3002\u8FD9\u91CC\u4EC5\u8C03\u6574\u5185\u5BB9\u8868\u8FBE\uFF0C\u4E0D\u4F1A\u7834\u574F\u9875\u9762\u8BFB\u53D6\u3002"))), React.createElement("div", {
-    className: "config-preference-note"
+    className: "mi-feedback mi-feedback-info config-preference-note"
   }, React.createElement(Icon, {
     name: "ShieldCheck",
     className: "mt-0.5 h-4 w-4 shrink-0 text-indigo-600"
@@ -3870,7 +3938,7 @@ function App() {
         });
       });
     },
-    className: "config-input"
+    className: "mi-field config-input"
   }, React.createElement("option", {
     value: "standard"
   }, "\u6807\u51C6\u7CBE\u4FEE"), React.createElement("option", {
@@ -3890,7 +3958,7 @@ function App() {
         });
       });
     },
-    className: "config-input"
+    className: "mi-field config-input"
   }, React.createElement("option", {
     value: "auto"
   }, "\u81EA\u52A8\u51B3\u5B9A"), [3, 4, 5, 6, 7, 8, 9].map(function (count) {
@@ -3913,7 +3981,7 @@ function App() {
         });
       });
     },
-    className: "config-input"
+    className: "mi-field config-input"
   }, React.createElement("option", {
     value: "preserve"
   }, "\u5C3D\u91CF\u4FDD\u7559\u539F\u6587"), React.createElement("option", {
@@ -3925,7 +3993,7 @@ function App() {
   }, React.createElement("label", {
     className: "config-label"
   }, "\u6807\u9898\u5904\u7406"), React.createElement("label", {
-    className: "config-checkbox"
+    className: "mi-field config-checkbox"
   }, React.createElement("input", {
     type: "checkbox",
     checked: Boolean((_apiConfig$processing4 = apiConfig.processingPreferences) === null || _apiConfig$processing4 === void 0 ? void 0 : _apiConfig$processing4.preserveTitle),
@@ -3953,7 +4021,7 @@ function App() {
         });
       });
     },
-    className: "config-preference-textarea",
+    className: "mi-field config-preference-textarea",
     placeholder: "\u4F8B\u5982\uFF1A\u4FDD\u7559\u7B2C\u4E00\u4EBA\u79F0\uFF1B\u6807\u9898\u4E0D\u8981\u592A\u8425\u9500\uFF1B\u6B63\u6587\u5C3D\u91CF\u514B\u5236\u3002",
     spellCheck: "false"
   }))), React.createElement("p", {
@@ -3977,7 +4045,8 @@ function App() {
       return handleLoadModels('image');
     },
     disabled: configTools.imageModels.status === 'loading',
-    className: "config-action-button"
+    "aria-busy": configTools.imageModels.status === 'loading',
+    className: "mi-button mi-button-compact config-action-button"
   }, React.createElement(Icon, {
     name: configTools.imageModels.status === 'loading' ? 'LoaderCircle' : 'ListFilter',
     className: "h-3.5 w-3.5 ".concat(configTools.imageModels.status === 'loading' ? 'animate-spin' : '')
@@ -3996,7 +4065,7 @@ function App() {
       }));
     },
     placeholder: "https://api.openai.com/v1 \u6216\u5B8C\u6574\u56FE\u7247\u5730\u5740",
-    className: "config-input"
+    className: "mi-field config-input"
   }), React.createElement("div", {
     className: "config-hint"
   }, "\u5B9E\u9645\u8BF7\u6C42\uFF1A", resolveApiEndpoint(apiConfig.imageApiUrl, 'image') || '请填写地址')), React.createElement("div", {
@@ -4011,7 +4080,7 @@ function App() {
       return handleModelSelection('image', e.target.value);
     },
     "aria-label": "\u9009\u62E9\u56FE\u7247\u6A21\u578B",
-    className: "config-input config-model-select"
+    className: "mi-field config-input config-model-select"
   }, apiConfig.imageModel && !imageModels.includes(apiConfig.imageModel) && React.createElement("option", {
     value: apiConfig.imageModel
   }, apiConfig.imageModel), imageModels.map(function (model) {
@@ -4033,7 +4102,7 @@ function App() {
       }));
     },
     placeholder: "gpt-image-1",
-    className: "config-input"
+    className: "mi-field config-input"
   })), React.createElement("div", {
     className: "config-field"
   }, React.createElement("label", {
@@ -4047,7 +4116,7 @@ function App() {
       }));
     },
     placeholder: "768x1024",
-    className: "config-input"
+    className: "mi-field config-input"
   })), React.createElement("div", {
     className: "config-field config-span-2"
   }, React.createElement("label", {
@@ -4061,13 +4130,13 @@ function App() {
       }));
     },
     placeholder: "sk-...",
-    className: "config-input"
+    className: "mi-field config-input"
   }))), React.createElement(ConfigStatus, {
     state: configTools.imageModels
   })), React.createElement("section", {
     className: "config-section"
   }, React.createElement("details", {
-    className: "image-diagnostic"
+    className: "mi-surface mi-surface-card image-diagnostic"
   }, React.createElement("summary", null, "\u6700\u8FD1\u4E00\u6B21\u751F\u56FE\u8BCA\u65AD", React.createElement("span", null, lastImageDiagnostic !== null && lastImageDiagnostic !== void 0 && lastImageDiagnostic.updatedAt ? new Date(lastImageDiagnostic.updatedAt).toLocaleString() : '暂无记录')), lastImageDiagnostic ? React.createElement("dl", {
     className: "image-diagnostic-grid"
   }, [['请求方式', lastImageDiagnostic.requestMode], ['请求接口', lastImageDiagnostic.endpointPath], ['请求格式', lastImageDiagnostic.requestedFormat], ['实际返回', lastImageDiagnostic.actualFormat], ['图片来源', lastImageDiagnostic.imageHost], ['保存方式', lastImageDiagnostic.storageBackend], ['保存结果', lastImageDiagnostic.storageStatus], ['刷新恢复', lastImageDiagnostic.restoreStatus], ['失败原因', lastImageDiagnostic.failureReason || '无']].map(function (_ref1) {
@@ -4084,7 +4153,7 @@ function App() {
     className: "config-dialog-footer"
   }, React.createElement("button", {
     onClick: handleSaveConfig,
-    className: "visual-button visual-button-primary flex w-full items-center justify-center"
+    className: "mi-button mi-button-prominent visual-button visual-button-primary w-full"
   }, "\u4FDD\u5B58\u5E76\u5E94\u7528\u914D\u7F6E")))));
 }
 var root = ReactDOM.createRoot(document.getElementById('root'));

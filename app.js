@@ -3865,7 +3865,7 @@ function App() {
       return handleModelSelection('text', e.target.value);
     },
     "aria-label": "\u9009\u62E9\u6587\u672C\u6A21\u578B",
-    className: "mi-field config-input config-model-select"
+    className: "mi-field config-input config-select"
   }, apiConfig.model && !textModels.includes(apiConfig.model) && React.createElement("option", {
     value: apiConfig.model
   }, apiConfig.model), textModels.map(function (model) {
@@ -3927,7 +3927,9 @@ function App() {
     className: "config-field"
   }, React.createElement("label", {
     className: "config-label"
-  }, "\u7CBE\u4FEE\u65B9\u5F0F"), React.createElement("select", {
+  }, "\u7CBE\u4FEE\u65B9\u5F0F"), React.createElement("div", {
+    className: "config-select-shell"
+  }, React.createElement("select", {
     value: ((_apiConfig$processing = apiConfig.processingPreferences) === null || _apiConfig$processing === void 0 ? void 0 : _apiConfig$processing.refinement) || 'standard',
     onChange: function onChange(e) {
       return setApiConfig(function (prev) {
@@ -3938,16 +3940,21 @@ function App() {
         });
       });
     },
-    className: "mi-field config-input"
+    className: "mi-field config-input config-select"
   }, React.createElement("option", {
     value: "standard"
   }, "\u6807\u51C6\u7CBE\u4FEE"), React.createElement("option", {
     value: "light"
-  }, "\u8F7B\u5EA6\u6574\u7406"))), React.createElement("div", {
+  }, "\u8F7B\u5EA6\u6574\u7406")), React.createElement(Icon, {
+    name: "ChevronDown",
+    className: "config-select-icon"
+  }))), React.createElement("div", {
     className: "config-field"
   }, React.createElement("label", {
     className: "config-label"
-  }, "\u5361\u7247\u603B\u9875\u6570"), React.createElement("select", {
+  }, "\u5361\u7247\u603B\u9875\u6570"), React.createElement("div", {
+    className: "config-select-shell"
+  }, React.createElement("select", {
     value: ((_apiConfig$processing2 = apiConfig.processingPreferences) === null || _apiConfig$processing2 === void 0 ? void 0 : _apiConfig$processing2.pageCount) || 'auto',
     onChange: function onChange(e) {
       return setApiConfig(function (prev) {
@@ -3958,7 +3965,7 @@ function App() {
         });
       });
     },
-    className: "mi-field config-input"
+    className: "mi-field config-input config-select"
   }, React.createElement("option", {
     value: "auto"
   }, "\u81EA\u52A8\u51B3\u5B9A"), [3, 4, 5, 6, 7, 8, 9].map(function (count) {
@@ -3966,11 +3973,16 @@ function App() {
       key: count,
       value: String(count)
     }, count, " \u9875");
+  })), React.createElement(Icon, {
+    name: "ChevronDown",
+    className: "config-select-icon"
   }))), React.createElement("div", {
     className: "config-field"
   }, React.createElement("label", {
     className: "config-label"
-  }, "\u5185\u5BB9\u53E3\u543B"), React.createElement("select", {
+  }, "\u5185\u5BB9\u53E3\u543B"), React.createElement("div", {
+    className: "config-select-shell"
+  }, React.createElement("select", {
     value: ((_apiConfig$processing3 = apiConfig.processingPreferences) === null || _apiConfig$processing3 === void 0 ? void 0 : _apiConfig$processing3.tone) || 'preserve',
     onChange: function onChange(e) {
       return setApiConfig(function (prev) {
@@ -3981,14 +3993,17 @@ function App() {
         });
       });
     },
-    className: "mi-field config-input"
+    className: "mi-field config-input config-select"
   }, React.createElement("option", {
     value: "preserve"
   }, "\u5C3D\u91CF\u4FDD\u7559\u539F\u6587"), React.createElement("option", {
     value: "concise"
   }, "\u66F4\u7B80\u6D01\u514B\u5236"), React.createElement("option", {
     value: "conversational"
-  }, "\u66F4\u53E3\u8BED\u81EA\u7136"))), React.createElement("div", {
+  }, "\u66F4\u53E3\u8BED\u81EA\u7136")), React.createElement(Icon, {
+    name: "ChevronDown",
+    className: "config-select-icon"
+  }))), React.createElement("div", {
     className: "config-field"
   }, React.createElement("label", {
     className: "config-label"
@@ -4080,7 +4095,7 @@ function App() {
       return handleModelSelection('image', e.target.value);
     },
     "aria-label": "\u9009\u62E9\u56FE\u7247\u6A21\u578B",
-    className: "mi-field config-input config-model-select"
+    className: "mi-field config-input config-select"
   }, apiConfig.imageModel && !imageModels.includes(apiConfig.imageModel) && React.createElement("option", {
     value: apiConfig.imageModel
   }, apiConfig.imageModel), imageModels.map(function (model) {

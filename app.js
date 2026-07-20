@@ -3264,8 +3264,13 @@ function App() {
           }, "\u751F\u6210\u7ED3\u679C"), React.createElement("div", {
             className: "visual-column-copy"
           }, "\u56FA\u5B9A 3:4 \u68C0\u67E5\u6846\uFF1A\u4E0A\u65B9\u5FEB\u901F\u786E\u8BA4\u7D20\u6750\uFF0C\u5E95\u90E8\u518D\u8FDB\u884C\u6210\u54C1\u5BF9\u6BD4\u3002"), (legacyVisualResult === null || legacyVisualResult === void 0 ? void 0 : legacyVisualResult.status) === 'success' && (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) !== 'success' && React.createElement("div", {
-            className: "mi-feedback mi-feedback-warning visual-notice mt-4"
-          }, "\u65E7\u7248\u4E3B\u89C6\u89C9\u4E0D\u80FD\u7528\u4E8E HTML \u6210\u54C1\u5361\uFF0C\u8BF7\u91CD\u65B0\u751F\u6210\u4E3B\u89C6\u89C9\u3002"), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'error' && React.createElement("div", {
+            className: "mi-feedback mi-feedback-warning visual-notice visual-result-notice",
+            role: "status",
+            "aria-live": "polite"
+          }, React.createElement(Icon, {
+            name: "CircleAlert",
+            className: "visual-result-notice-icon"
+          }), React.createElement("span", null, "\u65E7\u7248\u4E3B\u89C6\u89C9\u4E0D\u80FD\u7528\u4E8E HTML \u6210\u54C1\u5361\uFF0C\u8BF7\u91CD\u65B0\u751F\u6210\u4E3B\u89C6\u89C9\u3002")), (imageResult === null || imageResult === void 0 ? void 0 : imageResult.status) === 'error' && React.createElement("div", {
             className: "mi-feedback mi-feedback-error visual-error",
             role: "alert"
           }, "\u56FE\u7247\u751F\u6210\u5931\u8D25\uFF1A", imageResult.error), (fullImageResult === null || fullImageResult === void 0 ? void 0 : fullImageResult.status) === 'error' && React.createElement("div", {
